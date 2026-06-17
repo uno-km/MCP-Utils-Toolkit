@@ -1113,3 +1113,168 @@ def db_search_schema(db_path: str, search_term: str) -> str:
         return f"### Schema Search Results for '{search_term}'\n" + "\n".join(matches)
     except Exception as e:
         return f"Error searching schema: {str(e)}"
+
+
+def db_unmask_table_data(db_path: str, table_name: str, unmask_rules_json: str, client_token: str = None) -> str:
+    """
+    db_mask_table_data로 마스킹 처리된 컬럼을 원래 값으로 복원한다.
+    unmask_rules_json 예시: {"email": {"prefix_len": 3, "original_col": "email_raw"}}
+    복원은 shadow 테이블(원본 저장용)이 있을 경우 JOIN으로 처리한다.
+    write 권한 토큰 필수.
+    """
+    try:
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+
+    try:
+        rules = json.loads(unmask_rules_json)
+    except json.JSONDecodeError as je:
+        return f"Error: Invalid unmask_rules_json. {je}"
+
+    try:
+        conn = _get_connection(db_path)
+        cursor = conn.cursor()
+
+        # 테이블 컬럼 확인
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        cols_info = {row[1]: row[2] for row in cursor.fetchall()}
+        if not cols_info:
+            conn.close()
+            return f"Error: Table '{table_name}' not found in {db_path}."
+
+        # shadow 테이블 존재 여부 확인
+        shadow_table = f"{table_name}_shadow"
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        all_tables = [r[0] for r in cursor.fetchall()]
+        has_shadow = shadow_table in all_tables
+
+        restored_cols = []
+        skipped_cols = []
+
+        for col_name, rule in rules.items():
+            if col_name not in cols_info:
+                skipped_cols.append(f"{col_name} (not found in table)")
+                continue
+
+            if has_shadow:
+                # shadow 테이블에서 original 복원
+                try:
+                    cursor.execute(f"PRAGMA table_info({shadow_table});")
+                    shadow_cols = [r[1] for r in cursor.fetchall()]
+                    if col_name in shadow_cols:
+                        cursor.execute(f"""
+                            UPDATE {table_name}
+                            SET {col_name} = (
+                                SELECT {col_name} FROM {shadow_table}
+                                WHERE {shadow_table}.rowid = {table_name}.rowid
+                            )
+                        """)
+                        conn.commit()
+                        restored_cols.append(f"{col_name} (restored from shadow)")
+                    else:
+                        skipped_cols.append(f"{col_name} (shadow column not found)")
+                except Exception as ex:
+                    skipped_cols.append(f"{col_name} (shadow restore error: {ex})")
+            else:
+                # 규칙 기반 역변환 (제한적 — 해시 마스킹은 복원 불가, prefix 마스킹만 가능)
+                mask_type = rule.get("mask_type", "prefix")
+                if mask_type == "static":
+                    original_value = rule.get("original_value")
+                    if original_value:
+                        cursor.execute(f"UPDATE {table_name} SET {col_name} = ?", (original_value,))
+                        conn.commit()
+                        restored_cols.append(f"{col_name} (restored to static value)")
+                    else:
+                        skipped_cols.append(f"{col_name} (no original_value provided for static restore)")
+                else:
+                    skipped_cols.append(f"{col_name} (irreversible mask type: {mask_type})")
+
+        conn.close()
+
+        report = f"## 🔓 DB Unmask Report: `{table_name}`\n\n"
+        report += f"**Database**: `{db_path}`  \n"
+        report += f"**Shadow Table**: {'Found ✅' if has_shadow else 'Not Found ⚠️'}\n\n"
+        if restored_cols:
+            report += "### ✅ Restored Columns\n"
+            for c in restored_cols:
+                report += f"- {c}\n"
+        if skipped_cols:
+            report += "\n### ⚠️ Skipped / Failed\n"
+            for c in skipped_cols:
+                report += f"- {c}\n"
+
+        return report
+
+    except Exception as e:
+        return f"Error in db_unmask_table_data: {str(e)}"
+
+
+def db_sync_connector(src_db: str, dest_db: str, table_name: str, client_token: str = None) -> str:
+    """
+    소스 SQLite DB의 특정 테이블 전체를 목적지 SQLite DB로 직접 동기화한다.
+    목적지에 테이블이 없으면 자동 생성, 있으면 INSERT OR REPLACE로 upsert 처리.
+    write 권한 토큰 필수. 두 경로 모두 C:\\ameva 하위만 허용.
+    """
+    try:
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+
+    try:
+        src_conn = _get_connection(src_db)
+        src_cursor = src_conn.cursor()
+
+        # 소스 테이블 스키마 가져오기
+        src_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        schema_row = src_cursor.fetchone()
+        if not schema_row:
+            src_conn.close()
+            return f"Error: Table '{table_name}' not found in source DB '{src_db}'."
+
+        create_sql = schema_row[0]
+
+        # 소스 데이터 읽기
+        src_cursor.execute(f"SELECT * FROM {table_name}")
+        rows = src_cursor.fetchall()
+        col_count = len(src_cursor.description)
+        col_names = [d[0] for d in src_cursor.description]
+        src_conn.close()
+
+        # 목적지 DB 경로 보안 검사 — _get_connection 이 처리
+        # 목적지 DB가 없으면 생성
+        dest_norm = os.path.abspath(dest_db)
+        if not dest_norm.lower().startswith(r"c:\ameva"):
+            return f"Security Error: Destination path must be under C:\\ameva. Got: {dest_norm}"
+
+        dest_conn = sqlite3.connect(dest_norm)
+        dest_cursor = dest_conn.cursor()
+
+        # 목적지 테이블 생성 (없으면)
+        dest_cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if not dest_cursor.fetchone():
+            dest_cursor.execute(create_sql)
+            dest_conn.commit()
+            table_action = "created"
+        else:
+            table_action = "already exists"
+
+        # Bulk upsert
+        placeholders = ", ".join(["?" for _ in col_names])
+        upsert_sql = f"INSERT OR REPLACE INTO {table_name} ({', '.join(col_names)}) VALUES ({placeholders})"
+        dest_cursor.executemany(upsert_sql, rows)
+        dest_conn.commit()
+        dest_conn.close()
+
+        return (
+            f"## 🔄 DB Sync Connector\n\n"
+            f"**Source**: `{src_db}`  \n"
+            f"**Destination**: `{dest_db}`  \n"
+            f"**Table**: `{table_name}` ({table_action})  \n"
+            f"**Rows Synced**: {len(rows)}  \n"
+            f"**Columns**: {', '.join(col_names)}  \n\n"
+            f"✅ Sync complete. {len(rows)} record(s) upserted."
+        )
+
+    except Exception as e:
+        return f"Error in db_sync_connector: {str(e)}"

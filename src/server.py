@@ -1,11 +1,15 @@
 from mcp.server.fastmcp import FastMCP
 from tools.document.file_manager import docker_delete_file, docker_move_file
-from tools.document.md_converter import convert_md_to_docx_logic
+from tools.document.md_converter import convert_md_to_docx_logic, docx_to_markdown, md_image_path_fixer
 from tools.git import git_manager
 from tools.ssh import ssh_manager
 from tools.utils import utils_manager
 from tools.web import crawl_bot
 from tools.database import db_consolidator
+from tools.docker import docker_manager
+from tools.dataset import dataset_aggregator
+from tools.search import code_searcher
+from tools.network import net_discovery
 from utils.audit_logger import log_mcp_action
 
 def create_server() -> FastMCP:
@@ -15,11 +19,26 @@ def create_server() -> FastMCP:
     """
     mcp = FastMCP("AMEVA_Toolkit_Utils")
 
-    # --- Document & File Tools (Docker/Native) ---
-    @mcp.tool(name="convert_md_to_docx", description="Convert Markdown file to Word DOCX format")
+    # ──────────────────────────────────────────────────────────────────
+    # Document & File Tools
+    # ──────────────────────────────────────────────────────────────────
+
+    @mcp.tool(name="convert_md_to_docx", description="Convert Markdown file to Word DOCX format. Supports headings, bullets, code blocks, bold, numbered lists.")
     def tool_md_to_docx(input_md_path: str, output_docx_path: str) -> str:
         res = convert_md_to_docx_logic(input_md_path, output_docx_path)
         log_mcp_action("convert_md_to_docx", {"input": input_md_path, "output": output_docx_path}, res)
+        return res
+
+    @mcp.tool(name="docx_to_markdown", description="Convert a Word DOCX file to structured Markdown. Parses headings, lists, bold/italic, and tables. Set output_md_path to save to file, or leave empty to return text directly.")
+    def tool_docx_to_markdown(docx_path: str, output_md_path: str = None) -> str:
+        res = docx_to_markdown(docx_path, output_md_path)
+        log_mcp_action("docx_to_markdown", {"docx_path": docx_path, "output": output_md_path}, res)
+        return res
+
+    @mcp.tool(name="md_image_path_fixer", description="Scan a Markdown file for broken image paths and auto-fix them by searching the base_image_dir for matching filenames.")
+    def tool_md_image_path_fixer(doc_path: str, base_image_dir: str) -> str:
+        res = md_image_path_fixer(doc_path, base_image_dir)
+        log_mcp_action("md_image_path_fixer", {"doc_path": doc_path, "base_image_dir": base_image_dir}, res)
         return res
 
     @mcp.tool(name="delete_file_in_docker", description="Delete a file inside the Docker container")
@@ -34,7 +53,10 @@ def create_server() -> FastMCP:
         log_mcp_action("move_file_in_docker", {"src_path": src_path, "dest_path": dest_path}, res)
         return res
 
-    # --- Git & SSH Tools (Native Host) ---
+    # ──────────────────────────────────────────────────────────────────
+    # Git & SSH Tools
+    # ──────────────────────────────────────────────────────────────────
+
     @mcp.tool(name="git_status", description="Get the git status of a repository (e.g., AMEVA-Doc-AI)")
     def tool_git_status(repo_name: str) -> str:
         res = git_manager.git_status(repo_name)
@@ -101,27 +123,57 @@ def create_server() -> FastMCP:
         log_mcp_action("git_stash", {"repo": repo_name, "action": action, "stash_id": stash_id}, res)
         return res
 
+    @mcp.tool(name="workspace_git_broadcaster", description="Scan all AMEVA repositories under C:\\ameva and report each repo's branch, ahead/behind status, and changed file count in one consolidated table.")
+    def tool_workspace_git_broadcaster() -> str:
+        res = git_manager.workspace_git_broadcaster()
+        log_mcp_action("workspace_git_broadcaster", {}, res)
+        return res
+
+    @mcp.tool(name="git_commit_helper", description="Analyze staged git diff and auto-generate Conventional Commits message suggestions (feat/fix/docs/chore etc.) for the specified repository.")
+    def tool_git_commit_helper(repo_name: str) -> str:
+        res = git_manager.git_commit_helper(repo_name)
+        log_mcp_action("git_commit_helper", {"repo": repo_name}, res)
+        return res
+
     @mcp.tool(name="ssh_run_command", description="Run a shell command on a remote server via SSH")
     def tool_ssh_run_command(host: str, username: str, command: str, port: int = 22, password: str = None, key_content: str = None) -> str:
         res = ssh_manager.ssh_run_command(host, username, command, port, password, key_content)
         log_mcp_action("ssh_run_command", {"host": host, "username": username, "command": command, "port": port}, res)
         return res
 
-    # --- Crawling Bot ---
+    # ──────────────────────────────────────────────────────────────────
+    # Web Crawling & Readability
+    # ──────────────────────────────────────────────────────────────────
+
     @mcp.tool(name="crawl_website", description="Crawls a website URL, extracts title, text content, and analyzes internal/external links")
     def tool_crawl_website(url: str, selector: str = None) -> str:
         res = crawl_bot.crawl_website(url, selector)
         log_mcp_action("crawl_website", {"url": url, "selector": selector}, res)
         return res
 
-    # --- Database Centralization & Operations ---
+    @mcp.tool(name="web_readability_cleaner", description="Extract clean readable content from a URL by stripping ads, navigation, sidebars and converting to Markdown.")
+    def tool_web_readability_cleaner(url: str) -> str:
+        res = crawl_bot.web_readability_cleaner(url)
+        log_mcp_action("web_readability_cleaner", {"url": url}, res)
+        return res
+
+    @mcp.tool(name="dead_link_scanner", description="Parse all URLs inside a Markdown file and check each one via HTTP HEAD request to identify 404 dead links.")
+    def tool_dead_link_scanner(md_file_path: str) -> str:
+        res = crawl_bot.dead_link_scanner(md_file_path)
+        log_mcp_action("dead_link_scanner", {"md_file_path": md_file_path}, res)
+        return res
+
+    # ──────────────────────────────────────────────────────────────────
+    # Database Centralization & Operations
+    # ──────────────────────────────────────────────────────────────────
+
     @mcp.tool(name="db_get_schema", description="Get the schema (tables, columns, SQL) of a SQLite database")
     def tool_db_get_schema(db_path: str) -> str:
         res = db_consolidator.db_get_schema(db_path)
         log_mcp_action("db_get_schema", {"db_path": db_path}, res)
         return res
 
-    @mcp.tool(name="db_execute_query", description="Execute a SQLite query safely. Modifying queries are blocked if read_only=True")
+    @mcp.tool(name="db_execute_query", description="Execute a SQLite query safely. Modifying queries are blocked if read_only=True. output_format: markdown | json | csv | html | xml | plain")
     def tool_db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown", client_token: str = None) -> str:
         res = db_consolidator.db_execute_query(db_path, query, read_only, output_format, client_token)
         log_mcp_action("db_execute_query", {"db_path": db_path, "query": query, "read_only": read_only, "output_format": output_format, "client_token": client_token}, res)
@@ -181,6 +233,18 @@ def create_server() -> FastMCP:
         log_mcp_action("db_mask_table_data", {"db_path": db_path, "table_name": table_name, "mask_rules_json": mask_rules_json, "client_token": client_token}, res)
         return res
 
+    @mcp.tool(name="db_unmask_table_data", description="Restore previously masked columns using shadow table or unmask_rules. Requires write client_token. unmask_rules_json: {\"col\": {\"mask_type\": \"static\", \"original_value\": \"...\"}}")
+    def tool_db_unmask_table_data(db_path: str, table_name: str, unmask_rules_json: str, client_token: str = None) -> str:
+        res = db_consolidator.db_unmask_table_data(db_path, table_name, unmask_rules_json, client_token)
+        log_mcp_action("db_unmask_table_data", {"db_path": db_path, "table_name": table_name, "client_token": client_token}, res)
+        return res
+
+    @mcp.tool(name="db_sync_connector", description="Bulk sync a table from one SQLite DB to another. Creates table if missing, upserts rows. Requires write client_token.")
+    def tool_db_sync_connector(src_db: str, dest_db: str, table_name: str, client_token: str = None) -> str:
+        res = db_consolidator.db_sync_connector(src_db, dest_db, table_name, client_token)
+        log_mcp_action("db_sync_connector", {"src_db": src_db, "dest_db": dest_db, "table_name": table_name, "client_token": client_token}, res)
+        return res
+
     @mcp.tool(name="db_optimize_query_tuning", description="Analyze SQL query and suggest optimal missing CREATE INDEX index statements")
     def tool_db_optimize_query_tuning(db_path: str, slow_query: str) -> str:
         res = db_consolidator.db_optimize_query_tuning(db_path, slow_query)
@@ -217,7 +281,10 @@ def create_server() -> FastMCP:
         log_mcp_action("db_search_schema", {"db_path": db_path, "search_term": search_term}, res)
         return res
 
-    # --- System & Developer Utilities ---
+    # ──────────────────────────────────────────────────────────────────
+    # System & Developer Utilities
+    # ──────────────────────────────────────────────────────────────────
+
     @mcp.tool(name="get_system_info", description="Get host system metrics (CPU, memory, disk usage, OS)")
     def tool_get_system_info() -> str:
         res = utils_manager.get_system_info()
@@ -276,6 +343,82 @@ def create_server() -> FastMCP:
     def tool_extract_text_from_url(url: str) -> str:
         res = utils_manager.extract_text_from_url(url)
         log_mcp_action("extract_text_from_url", {"url": url}, res)
+        return res
+
+    @mcp.tool(name="gpu_monitor", description="Query nvidia-smi for real-time GPU utilization, VRAM usage, temperature, and power draw. Falls back to WMI on Windows if nvidia-smi unavailable.")
+    def tool_gpu_monitor() -> str:
+        res = utils_manager.gpu_monitor()
+        log_mcp_action("gpu_monitor", {}, res)
+        return res
+
+    @mcp.tool(name="system_thermal_scanner", description="Scan CPU temperature, clock speed, and per-core utilization. Uses psutil sensors on Linux/Mac, WMI on Windows.")
+    def tool_system_thermal_scanner() -> str:
+        res = utils_manager.system_thermal_scanner()
+        log_mcp_action("system_thermal_scanner", {}, res)
+        return res
+
+    @mcp.tool(name="process_watchdog", description="Monitor and control system processes. action: 'list' (top 30 by CPU), 'find' (search by name), 'kill' (terminate by name). process_name required for find/kill.")
+    def tool_process_watchdog(action: str, process_name: str = None) -> str:
+        res = utils_manager.process_watchdog(action, process_name)
+        log_mcp_action("process_watchdog", {"action": action, "process_name": process_name}, res)
+        return res
+
+    @mcp.tool(name="task_cron_scheduler", description="Manage scheduled tasks. action: 'list'|'create'|'delete'|'run'. Windows uses schtasks, Linux uses crontab. job_name, cron_expression, command required for create.")
+    def tool_task_cron_scheduler(action: str, job_name: str = None, cron_expression: str = None, command: str = None) -> str:
+        res = utils_manager.task_cron_scheduler(action, job_name, cron_expression, command)
+        log_mcp_action("task_cron_scheduler", {"action": action, "job_name": job_name}, res)
+        return res
+
+    @mcp.tool(name="rest_client_simulator", description="Send REST API requests without curl. Returns formatted response headers, body (JSON pretty-printed), elapsed time, and the equivalent curl command.")
+    def tool_rest_client_simulator(method: str, url: str, payload_json: str = None, headers_json: str = None) -> str:
+        res = utils_manager.rest_client_simulator(method, url, payload_json, headers_json)
+        log_mcp_action("rest_client_simulator", {"method": method, "url": url}, res)
+        return res
+
+    @mcp.tool(name="html_to_pdf_renderer", description="Convert an HTML file or URL to PDF. Tries weasyprint → pdfkit → headless browser in order. Output path must be under C:\\ameva.")
+    def tool_html_to_pdf_renderer(html_path_or_url: str, output_pdf_path: str) -> str:
+        res = utils_manager.html_to_pdf_renderer(html_path_or_url, output_pdf_path)
+        log_mcp_action("html_to_pdf_renderer", {"source": html_path_or_url, "output": output_pdf_path}, res)
+        return res
+
+    # ──────────────────────────────────────────────────────────────────
+    # Docker Container Control [NEW]
+    # ──────────────────────────────────────────────────────────────────
+
+    @mcp.tool(name="docker_container_manager", description="Manage local Docker containers. action: 'list'|'stats'|'start'|'stop'|'restart'|'logs'|'inspect'. container_name required for all except list/stats.")
+    def tool_docker_container_manager(action: str, container_name: str = None, limit_lines: int = 50) -> str:
+        res = docker_manager.docker_container_manager(action, container_name, limit_lines)
+        log_mcp_action("docker_container_manager", {"action": action, "container": container_name}, res)
+        return res
+
+    # ──────────────────────────────────────────────────────────────────
+    # Dataset & Audit Aggregation [NEW]
+    # ──────────────────────────────────────────────────────────────────
+
+    @mcp.tool(name="audit_log_aggregator", description="Scan all AMEVA projects for mcp_audit.jsonl files, merge them into a single dataset JSONL with source_project tags, sorted by timestamp. Outputs stats on tool usage per project.")
+    def tool_audit_log_aggregator(output_dataset_path: str) -> str:
+        res = dataset_aggregator.audit_log_aggregator(output_dataset_path)
+        log_mcp_action("audit_log_aggregator", {"output": output_dataset_path}, res)
+        return res
+
+    # ──────────────────────────────────────────────────────────────────
+    # Code Search [NEW]
+    # ──────────────────────────────────────────────────────────────────
+
+    @mcp.tool(name="vector_code_searcher", description="BM25-based full-text code search across AMEVA project files. Returns top matching files with highlighted context lines. file_ext: '.py' or '.py,.js,.ts'")
+    def tool_vector_code_searcher(query: str, file_ext: str = ".py", search_root: str = None, top_k: int = 10, context_lines: int = 3) -> str:
+        res = code_searcher.vector_code_searcher(query, file_ext, search_root, top_k, context_lines)
+        log_mcp_action("vector_code_searcher", {"query": query, "file_ext": file_ext}, res)
+        return res
+
+    # ──────────────────────────────────────────────────────────────────
+    # Network Service Discovery [NEW]
+    # ──────────────────────────────────────────────────────────────────
+
+    @mcp.tool(name="service_discovery", description="Parallel port scan a single IP or CIDR subnet. Identifies open ports and auto-detects AMEVA services (Streamlit, FastAPI, Gradio, Ollama, Redis). ports_json: '[22, 80, 8000, 8501]'")
+    def tool_service_discovery(subnet: str = "127.0.0.1", ports_json: str = "[22, 80, 8000, 8080, 8501]", timeout: float = 0.5, max_hosts: int = 254) -> str:
+        res = net_discovery.service_discovery(subnet, ports_json, timeout, max_hosts)
+        log_mcp_action("service_discovery", {"subnet": subnet, "ports_json": ports_json}, res)
         return res
 
     return mcp

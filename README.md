@@ -1,89 +1,229 @@
-# AMEVA MCP Toolkit
+# AMEVA MCP Toolkit Utils
 
-AMEVA 에이전트 생태계의 자동화 및 개발 생산성 향상을 위한 모델 컨텍스트 프로토콜(MCP) 서버입니다. Git 제어, 문서 변환, 원격 명령어 실행, 데이터베이스 연산 등 다양한 개발자 도구를 단일 서버 인프라에 통합하여 제공합니다.
-
----
-
-## 핵심 구조 및 아키텍처
-
-- **src/server.py**: FastMCP 엔진 기반의 서버 진입점입니다. 각 도구의 API 명세를 정의하고 내부 구현체와 연결합니다.
-- **src/tools/**: 도메인별 독립적인 비즈니스 로직 구현체들로 구성됩니다.
-  - `database`: SQLite 데이터베이스 통합 및 마이그레이션 도구
-  - `document`: 마크다운의 DOCX 변환 및 컨테이너 내부 파일 관리 도구
-  - `git`: 로컬 작업 공간의 형상 관리 자동화 도구
-  - `ssh`: 원격 서버 제어 및 셸 스크립트 실행 도구
-  - `utils`: 시스템 상태 점검 및 네트워크 포트 스캔 도구
-  - `web`: 웹 크롤링 및 데이터 수집 도구
-- **src/utils/**: 감사 로깅 및 통계 모니터링 등 서버 운영에 필요한 내부 공통 헬퍼입니다.
+> **61개 MCP 도구**를 제공하는 AMEVA 에코시스템의 핵심 범용 유틸리티 서버.  
+> Git, DB, 웹 크롤링, 시스템 모니터링, Docker, 네트워크 스캔, 코드 검색까지 단일 서버로 통합.
 
 ---
 
-## 제공 API 및 도구 명세 (API & Tool Reference)
+## 📦 도구 도메인 구조
 
-전체 도구 API 리스트 및 요약 정보입니다. 상세 파라미터 정보 및 AI 활용 사례는 각 명세서 문서를 참고하십시오.
-
-### 1. Git 도구군 (GIT)
-> [상세 명세서 바로가기 (Git API Spec)](src/tools/git/README.md)
-
-| 도구명 (Tool Name) | 설명 (Description) | 주요 파라미터 (Main Params) |
-| :--- | :--- | :--- |
-| `git_status` | 리포지토리의 작업 공간 상태 조회 (`git status -sb`) | `repo_name` |
-| `git_log` | 커밋 로그 내역 조회 (단선 형태 그래프 출력) | `repo_name`, `limit` |
-| `git_diff` | 수정되거나 스테이징된 변경 사항 비교 | `repo_name`, `file_path` |
-| `git_clone` | 원격 저장소를 로컬 컴퓨터로 복제 | `repo_url`, `repo_name` |
-| `git_pull` | 원격 저장소의 최신 커밋 풀 및 병합 | `repo_name` |
-| `git_commit_and_push` | 전체 추가(`git add .`), 커밋 및 원격지 푸시 | `repo_name`, `commit_message` |
-| `git_branch` | 브랜치 목록 조회, 신규 생성 및 삭제 | `repo_name`, `action`, `branch_name` |
-| `git_checkout` | 브랜치 전환(신규 생성 포함) 및 파일 복구 | `repo_name`, `branch_or_file`, `create` |
-| `git_merge` | 특정 브랜치를 현재 활성화된 브랜치에 병합 | `repo_name`, `branch_name` |
-| `git_reset` | 현재 HEAD 포인터를 특정 해시로 복구/이동 | `repo_name`, `mode`, `commit_hash` |
-| `git_stash` | 로컬 변경분을 임시 공간으로 대피 또는 복구 | `repo_name`, `action`, `stash_id` |
-
-### 2. 시스템 및 유틸리티 도구군 (UTILS)
-> [상세 명세서 바로가기 (Utils API Spec)](src/tools/utils/README.md)
-
-| 도구명 (Tool Name) | 설명 (Description) | 주요 파라미터 (Main Params) |
-| :--- | :--- | :--- |
-| `get_system_info` | CPU, Memory, Disk 등 호스트 상태 지표 확인 | 없음 |
-| `check_port` | 특정 호스트의 TCP 포트 개방 상태 진단 | `host`, `port` |
-| `generate_uuid` | 고유한 UUID v4 문자열 무작위 생성 | 없음 |
-| `format_json` | JSON 문자열 구문 검증 및 들여쓰기 정렬 포맷팅 | `json_str` |
-| `base64_encode_decode` | Base64 인코딩 및 디코딩 기능 지원 | `mode`, `data` |
-| `calculate_file_hash` | 파일 무결성 확인용 해시(MD5/SHA256) 연산 | `file_path`, `algorithm` |
-| `get_external_ip` | 내부 로컬 및 외부 공인 IP 주소 조회 | 없음 |
-| `send_http_request` | REST API 테스트를 위한 HTTP 요청 송신 | `method`, `url`, `headers_json`, `body` |
-| `find_large_files` | 디렉토리 내 대용량 파일 탐색 | `dir_path`, `size_mb` |
-| `extract_text_from_url` | HTML 문서를 제거한 순수 텍스트 본문 추출 | `url` |
+| 도메인 | 경로 | 도구 수 | 설명 |
+| :----- | :--- | :-----: | :--- |
+| **Document** | `src/tools/document/` | 5 | MD↔DOCX 변환, 이미지 경로 수정, 파일 관리 |
+| **Git** | `src/tools/git/` | 13 | git 전 작업 + 전체 레포 브로드캐스트, 커밋 메시지 생성 |
+| **SSH** | `src/tools/ssh/` | 1 | 원격 SSH 커맨드 실행 |
+| **Web** | `src/tools/web/` | 3 | 웹 크롤링, 가독성 클리너, 데드링크 스캐너 |
+| **Database** | `src/tools/database/` | 19 | SQLite CRUD, 스키마, ERD, 마스킹/언마스킹, 동기화 |
+| **System Utils** | `src/tools/utils/` | 16 | 시스템/GPU/온도, 프로세스, 스케줄러, REST 클라이언트, HTML→PDF |
+| **Docker** | `src/tools/docker/` | 1 | 컨테이너 목록/시작/정지/로그/통계/inspect |
+| **Dataset** | `src/tools/dataset/` | 1 | Audit 로그 전사 병합 및 통계 분석 |
+| **Search** | `src/tools/search/` | 1 | BM25 기반 소스코드 전역 검색 |
+| **Network** | `src/tools/network/` | 1 | 병렬 포트 스캔 & AMEVA 서비스 자동 인식 |
+| **총계** | | **61** | |
 
 ---
 
-## 설계 중점 사항 (Key Focus)
+## 🔐 보안 정책
 
-- **도구 도메인 분류 명세화**: `DOC`, `GIT`, `CODE`, `INF` 등 도구의 특성에 맞게 I/O 모델과 성능 락킹 범위를 구분하여 동작 안정성을 도모합니다.
-- **감사 추적성(Audit Traceability)**: 호출 주체와 인수, 수행 결과 및 요약본을 `mcp_audit.jsonl`에 정형 데이터로 영구 보관합니다.
-- **모듈화와 관심사 분리**: FastMCP 라우팅 로직과 실제 도구의 실행 구현체를 물리적으로 완전히 분리하여 유지보수 용이성을 확보했습니다.
+### 경로 보안
+- **모든** 파일시스템 접근은 `C:\ameva` 하위만 허용 (Path Traversal 방지)
+- Docker 컨테이너 내부 실행 시 `/app/workspace` 자동 리매핑
 
----
-
-## 트레이드오프 (Trade-offs)
-
-- **동기식 감사 로그 기록과 병목 현상**:
-  - 데이터 신뢰성을 위해 도구가 동작할 때마다 감사 로그 파일(`mcp_audit.jsonl`)을 동기식으로 기록합니다. 다수의 에이전트가 동시에 API를 고빈도로 호출할 경우 디스크 I/O 병목이 유발될 수 있습니다.
-- **독립성과 호스트 직접 제어의 균형**:
-  - 문서 변환 등 외부 종속성이 강한 기능은 Docker 컨테이너 격리를 통해 안전을 기하지만, Git 및 SSH 제어는 호스트 운영체제 환경의 프로세스를 직접 구동합니다. 이는 격리 수준을 낮추는 대신 시스템 전역 리소스에 즉각 접근할 수 있는 실용성을 취한 선택입니다.
-- **FastMCP 프레임워크 선택**:
-  - 빠른 스키마 생성과 신속한 기능 확장을 위해 FastMCP 래퍼를 활용합니다. 이로 인해 원시 MCP 프로토콜이 제공하는 세밀한 세션 제어나 커스텀 에러 핸들링을 적용하기가 다소 제한적입니다.
+### CUD 쓰기 토큰 보안
+DB, 마스킹, 동기화 등 데이터 **변경** 작업은 `client_token` 필수:
+```bash
+# 환경변수 설정
+AMEVA_DB_WRITE_TOKEN=your-secret-token-here
+```
+토큰이 일치하지 않으면 `Security Error: CUD (Write) operation is restricted.` 반환.
 
 ---
 
-## 트러블슈팅 (Troubleshooting)
+## 🛠️ 전체 도구 목록
 
-- **Git `index.lock` 충돌**:
-  - 현상: 여러 에이전트가 동시에 특정 리포지토리에 git 작업을 요청하면 `index.lock` 파일이 선점되어 충돌이 발생합니다.
-  - 해결: 동시 수정이 빈번할 경우 원격 브랜치 상태 확인(`git fetch`) 단계와 실제 쓰기 커밋 단계를 분리 호출하거나, 로컬 큐잉 처리를 도입해야 합니다.
-- **Docker 볼륨 마운트 권한 및 경로 해석 오류**:
-  - 현상: 컨테이너 외부 호스트 경로를 `convert_md_to_docx` 도구에 바로 주입할 시 경로 오매핑으로 인해 파일을 찾지 못합니다.
-  - 해결: 도구 호출 전 호스트 절대 경로가 컨테이너와 정합하게 공유(마운트)되어 있는지 확인하고, 볼륨 맵 기준으로 상대 경로를 조정하십시오.
-- **SSH 인증 오류 및 네트워크 제한**:
-  - 현상: 원격 명령어 실행 중 `Auth failed` 또는 `Timeout` 오류가 발생합니다.
-  - 해결: 대상 서버의 SSH 포트(기본 22번) 개방 상태를 `check_port` 도구로 먼저 확인한 후, 비밀번호 또는 프라이빗 키의 인코딩 형식과 특수문자 누락 여부를 확인하십시오.
+### 📄 Document & File (5개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `convert_md_to_docx` | 마크다운 → DOCX (헤딩, 리스트, 코드블록, 볼드 지원) |
+| `docx_to_markdown` | DOCX → 마크다운 (헤딩, 테이블, 볼드/이탤릭 파싱) |
+| `md_image_path_fixer` | MD 내 깨진 이미지 경로 자동 교정 |
+| `delete_file_in_docker` | Docker 내 파일 삭제 |
+| `move_file_in_docker` | Docker 내 파일 이동/리네임 |
+
+### 🌿 Git & Source Control (13개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `git_status` | 레포 상태 조회 |
+| `git_pull` | 원격 풀 (토큰 자동 주입) |
+| `git_commit_and_push` | add + commit + push 원스텝 |
+| `git_clone` | 원격 레포 클론 |
+| `git_log` | 커밋 히스토리 조회 |
+| `git_diff` | 변경사항 diff |
+| `git_branch` | 브랜치 목록/생성/삭제 |
+| `git_checkout` | 브랜치/파일 체크아웃 |
+| `git_merge` | 브랜치 머지 |
+| `git_reset` | soft/mixed/hard 리셋 |
+| `git_stash` | stash push/pop/list/apply/clear |
+| `workspace_git_broadcaster` | **전체 AMEVA 레포 일괄 상태 진단** |
+| `git_commit_helper` | **staged diff 기반 커밋 메시지 자동 생성** |
+
+### 🌐 Web & Crawling (3개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `crawl_website` | 웹사이트 크롤 (링크/텍스트/메타) |
+| `web_readability_cleaner` | 광고/네비 제거 후 순수 마크다운 변환 |
+| `dead_link_scanner` | MD 파일 내 데드링크 전수 검사 |
+
+### 🗄️ Database (19개)
+
+| 도구명 | 쓰기 토큰 | 설명 |
+| :----- | :-------: | :--- |
+| `db_get_schema` | ❌ | 스키마 분석 |
+| `db_execute_query` | 조건부 | SQL 실행 (output_format: markdown/json/csv/html/xml/plain) |
+| `db_view_table_data` | ❌ | 테이블 브라우저 (페이징, 정렬, 필터) |
+| `db_summarize_table` | ❌ | 테이블 프로파일링 |
+| `db_search_schema` | ❌ | 스키마 키워드 검색 |
+| `db_global_search_value` | ❌ | 전체 텍스트 컬럼 값 검색 |
+| `db_generate_erd` | ❌ | Mermaid ERD 다이어그램 생성 |
+| `db_generate_mock_data` | ✅ | 가짜 테스트 데이터 삽입 |
+| `db_merge_tables` | ✅ | DB 간 테이블 머지 |
+| `db_sync_connector` | ✅ | **DB 간 테이블 벌크 동기화 (upsert)** |
+| `db_mask_table_data` | ✅ | 컬럼 GDPR 마스킹 |
+| `db_unmask_table_data` | ✅ | **마스킹 복원 (shadow 테이블 또는 규칙 기반)** |
+| `db_enable_time_travel` | ✅ | shadow ledger + 트리거 활성화 |
+| `db_restore_time_travel` | ✅ | 타임스탬프 기반 데이터 복원 |
+| `db_compare_schemas` | ❌ | 두 DB 스키마 비교 + 동기화 DDL |
+| `db_transpile_sqlite_to_other` | ❌ | SQLite → PostgreSQL/MySQL 변환 |
+| `db_optimize_query_tuning` | ❌ | 인덱스 추천 분석 |
+| `db_format_sql` | ❌ | SQL 포매팅/키워드 대문자화 |
+| `db_profile_and_scan_health` | ❌ | DB 헬스체크 (FK 무결성, 인덱스 분석) |
+
+### ⚙️ System Utilities (16개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `get_system_info` | CPU/메모리/디스크 현황 |
+| `check_port` | TCP 포트 열림 여부 확인 |
+| `generate_uuid` | UUID v4 생성 |
+| `format_json` | JSON 포맷/검증 |
+| `base64_encode_decode` | Base64 인코딩/디코딩 |
+| `calculate_file_hash` | MD5/SHA256 해시 계산 (Docker) |
+| `get_external_ip` | 내부/외부 IP 조회 |
+| `send_http_request` | 임의 HTTP 요청 |
+| `find_large_files` | 대용량 파일 탐색 (Docker) |
+| `extract_text_from_url` | URL에서 순수 텍스트 추출 |
+| `gpu_monitor` | **GPU 사용률/VRAM/온도/전력 실시간 조회** |
+| `system_thermal_scanner` | **CPU 온도/클럭/코어별 사용률** |
+| `process_watchdog` | **프로세스 스캔/탐색/강제종료** |
+| `task_cron_scheduler` | **Windows schtasks / Linux crontab 관리** |
+| `rest_client_simulator` | **curl 없는 REST API 테스트 + curl 등가 출력** |
+| `html_to_pdf_renderer` | **HTML/URL → PDF 변환 (weasyprint/pdfkit/headless)** |
+
+### 🐳 Docker Container Control (1개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `docker_container_manager` | 컨테이너 list/stats/start/stop/restart/logs/inspect |
+
+### 📦 Dataset & Audit (1개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `audit_log_aggregator` | 전체 AMEVA 프로젝트 mcp_audit.jsonl 병합 및 통계 |
+
+### 🔍 Code Search (1개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `vector_code_searcher` | BM25 알고리즘 소스코드 전역 검색 (컨텍스트 하이라이팅) |
+
+### 🌐 Network Discovery (1개)
+
+| 도구명 | 설명 |
+| :----- | :--- |
+| `service_discovery` | 병렬 포트 스캔 + AMEVA 서비스 자동 인식 (Streamlit/Gradio/Ollama 등) |
+
+---
+
+## 🚀 빠른 시작
+
+### 필수 환경변수
+
+```bash
+AMEVA_GITHUB_TOKEN=ghp_xxxx         # GitHub 인증 토큰 (git push/pull)
+AMEVA_DB_WRITE_TOKEN=your-secret    # DB 쓰기 권한 토큰
+AMEVA_IN_CONTAINER=true             # Docker 내부 실행 시
+```
+
+### 실행
+
+```bash
+# 로컬 직접 실행
+cd src
+python server.py
+
+# Docker 실행
+docker compose up -d
+```
+
+### MCP 클라이언트 연결 (Claude Desktop)
+
+```json
+{
+  "mcpServers": {
+    "ameva-toolkit-utils": {
+      "command": "python",
+      "args": ["C:/ameva/AMEVA-MCP-Toolkit-Utils/src/server.py"],
+      "env": {
+        "AMEVA_GITHUB_TOKEN": "ghp_xxxx",
+        "AMEVA_DB_WRITE_TOKEN": "your-secret"
+      }
+    }
+  }
+}
+```
+
+---
+
+## 📂 프로젝트 구조
+
+```
+AMEVA-MCP-Toolkit-Utils/
+├── src/
+│   ├── server.py              # FastMCP 서버 진입점 (61개 도구 등록)
+│   ├── tools/
+│   │   ├── document/          # MD↔DOCX, 파일 관리
+│   │   ├── git/               # Git 전 작업 + 브로드캐스터
+│   │   ├── ssh/               # 원격 SSH
+│   │   ├── web/               # 크롤링, 가독성, 데드링크
+│   │   ├── database/          # SQLite 전 기능
+│   │   ├── utils/             # 시스템, GPU, 프로세스, 스케줄러
+│   │   ├── docker/            # 컨테이너 관리
+│   │   ├── dataset/           # Audit 로그 병합
+│   │   ├── search/            # BM25 코드 검색
+│   │   └── network/           # 포트 스캔
+│   └── utils/
+│       └── audit_logger.py    # MCP 액션 감사 로그
+├── requirements.txt
+├── Dockerfile
+└── README.md
+```
+
+---
+
+## 📋 requirements.txt 의존성
+
+```
+mcp[cli]
+fastmcp
+requests
+beautifulsoup4
+psutil
+python-docx
+paramiko
+```
+
+> **선택적**: `weasyprint` 또는 `pdfkit` (HTML→PDF), `nvidia-smi` (GPU 모니터)
