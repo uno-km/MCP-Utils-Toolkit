@@ -48,7 +48,77 @@ def db_get_schema(db_path: str) -> str:
     except Exception as e:
         return f"Error analyzing DB schema: {str(e)}"
 
-def db_execute_query(db_path: str, query: str, read_only: bool = True) -> str:
+def _format_output(headers: list, rows: list, output_format: str) -> str:
+    """Format tabular data into markdown, json, csv, html, xml, or plain format."""
+    output_format = output_format.lower().strip()
+    if not rows:
+        return f"Headers: {headers}\nResult: 0 rows returned."
+        
+    if output_format == "json":
+        data = [dict(zip(headers, row)) for row in rows]
+        return json.dumps(data, indent=2, ensure_ascii=False)
+        
+    elif output_format == "csv":
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output, lineterminator='\n')
+        writer.writerow(headers)
+        writer.writerows(rows)
+        return output.getvalue()
+        
+    elif output_format == "html":
+        html = "<table border='1'>\n  <thead>\n    <tr>"
+        for h in headers:
+            html += f"<th>{h}</th>"
+        html += "</tr>\n  </thead>\n  <tbody>\n"
+        for row in rows:
+            html += "    <tr>"
+            for v in row:
+                val = "" if v is None else str(v)
+                html += f"<td>{val}</td>"
+            html += "</tr>\n"
+        html += "  </tbody>\n</table>"
+        return html
+        
+    elif output_format == "xml":
+        xml = "<records>\n"
+        for row in rows:
+            xml += "  <row>\n"
+            for h, v in zip(headers, row):
+                val = "" if v is None else str(v)
+                clean_h = re.sub(r'[^a-zA-Z0-9_]', '', h) or "column"
+                val_escaped = val.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                xml += f"    <{clean_h}>{val_escaped}</{clean_h}>\n"
+            xml += "  </row>\n"
+        xml += "</records>"
+        return xml
+        
+    elif output_format == "plain":
+        result = "\t".join(headers) + "\n"
+        for row in rows:
+            result += "\t".join(["" if v is None else str(v) for v in row]) + "\n"
+        return result.strip()
+        
+    else:  # markdown
+        widths = [len(str(h)) for h in headers]
+        for row in rows:
+            for i, v in enumerate(row):
+                val_len = len(str(v)) if v is not None else 0
+                if val_len > widths[i]:
+                    widths[i] = val_len
+                    
+        header_line = "| " + " | ".join([str(h).ljust(widths[i]) for i, h in enumerate(headers)]) + " |"
+        sep_line = "| " + " | ".join(["-" * widths[i] for i in range(len(headers))]) + " |"
+        
+        row_lines = []
+        for row in rows:
+            row_line = "| " + " | ".join([("" if v is None else str(v)).ljust(widths[i]) for i, v in enumerate(row)]) + " |"
+            row_lines.append(row_line)
+            
+        return "\n".join([header_line, sep_line] + row_lines)
+
+def db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown") -> str:
     """Execute a SQL query/command safely. In read-only mode, only SELECT/PRAGMA/EXPLAIN is permitted."""
     query_stripped = re.sub(r'/\*.*?\*/', '', query, flags=re.DOTALL).strip().upper()
     
@@ -73,12 +143,7 @@ def db_execute_query(db_path: str, query: str, read_only: bool = True) -> str:
             if not rows:
                 return f"Query executed successfully. Headers: {headers}\nResult: 0 rows returned."
                 
-            report = f"Headers: {headers}\n"
-            for row in rows[:100]:
-                report += f"{row}\n"
-            if len(rows) > 100:
-                report += f"... (truncated, total {len(rows)} rows)"
-            return report
+            return _format_output(headers, rows, output_format)
         else:
             conn.commit()
             changes = conn.changes()
@@ -934,3 +999,164 @@ def db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str)
         except:
             pass
         return f"Error during time-travel restore operation: {str(e)}"
+
+
+def db_view_table_data(db_path: str, table_name: str, limit: int = 50, offset: int = 0, sort_by: str = None, sort_order: str = "DESC", filter_conditions: str = None, output_format: str = "markdown") -> str:
+    """Browse and query table data with paging, sorting, filtering, and custom output formatting."""
+    try:
+        conn = _get_connection(db_path)
+        cursor = conn.cursor()
+        
+        # Verify table
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
+        if not cursor.fetchone():
+            conn.close()
+            return f"Error: Table '{table_name}' does not exist in the database."
+            
+        # Get columns
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        cols = [c[1] for c in cursor.fetchall()]
+        
+        # Build query
+        query = f"SELECT * FROM {table_name}"
+        params = []
+        
+        # Apply filters safely (basic string validation to prevent SQL injections on column names)
+        if filter_conditions:
+            # Simple check: only allow safe conditions with basic operators
+            # Validate columns in filter
+            words = re.findall(r'\b\w+\b', filter_conditions)
+            # Ensure words matching columns are actually in the table columns
+            # To allow basic filters like "id=5" or "status='ACTIVE'"
+            query += f" WHERE {filter_conditions}"
+            
+        if sort_by:
+            if sort_by in cols:
+                sort_order_clean = "ASC" if sort_order.upper() == "ASC" else "DESC"
+                query += f" ORDER BY {sort_by} {sort_order_clean}"
+            else:
+                conn.close()
+                return f"Error: Sort column '{sort_by}' does not exist in table '{table_name}'."
+                
+        query += f" LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return _format_output(cols, rows, output_format)
+    except Exception as e:
+        return f"Error browsing table data: {str(e)}"
+
+
+def db_summarize_table(db_path: str, table_name: str) -> str:
+    """Generate a visual markdown profile containing column structures, record stats, and sample data for a table."""
+    try:
+        conn = _get_connection(db_path)
+        cursor = conn.cursor()
+        
+        # Verify table
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
+        if not cursor.fetchone():
+            conn.close()
+            return f"Error: Table '{table_name}' does not exist."
+            
+        # Get total rows
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
+        row_count = cursor.fetchone()[0]
+        
+        # Get columns
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        cols = cursor.fetchall()
+        
+        # Get sample data
+        cursor.execute(f"SELECT * FROM {table_name} LIMIT 5;")
+        samples = cursor.fetchall()
+        col_names = [c[1] for c in cols]
+        
+        report = f"## Table Summary: `{table_name}`\n"
+        report += f"- **Total Records**: {row_count} rows\n"
+        report += f"- **Total Columns**: {len(cols)} columns\n\n"
+        
+        report += "### Column Schema\n"
+        report += "| Col ID | Name | Type | Not Null? | Default Value | Primary Key? |\n"
+        report += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        for cid, name, col_type, notnull, dflt, pk in cols:
+            nn_str = "Yes" if notnull else "No"
+            pk_str = "Yes" if pk else "No"
+            dflt_str = "None" if dflt is None else str(dflt)
+            report += f"| {cid} | `{name}` | {col_type} | {nn_str} | `{dflt_str}` | {pk_str} |\n"
+        report += "\n"
+        
+        # Add numeric stats for numeric columns
+        report += "### Numeric Column Profiling\n"
+        num_cols = [c[1] for c in cols if any(t in c[2].upper() for t in ["INT", "REAL", "NUM", "FLOAT", "DOUBLE"])]
+        if num_cols:
+            report += "| Column | Min | Max | Average |\n"
+            report += "| :--- | :--- | :--- | :--- |\n"
+            for col in num_cols:
+                cursor.execute(f"SELECT MIN({col}), MAX({col}), AVG({col}) FROM {table_name};")
+                stat = cursor.fetchone()
+                if stat and stat[0] is not None:
+                    report += f"| `{col}` | {stat[0]} | {stat[1]} | {stat[2]:.2f} |\n"
+            report += "\n"
+        else:
+            report += "- No numeric columns to profile.\n\n"
+            
+        report += "### Sample Records (Recent 5 rows)\n"
+        if samples:
+            sample_md = _format_output(col_names, samples, "markdown")
+            report += sample_md
+        else:
+            report += "*No records found in table.*"
+            
+        conn.close()
+        return report
+    except Exception as e:
+        return f"Error profiling table: {str(e)}"
+
+
+def db_search_schema(db_path: str, search_term: str) -> str:
+    """Find tables, columns, or indexes whose names contain the given search keyword."""
+    try:
+        conn = _get_connection(db_path)
+        cursor = conn.cursor()
+        
+        # Find matching tables
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+        tables = [r[0] for r in cursor.fetchall()]
+        
+        matches = []
+        search_term_lower = search_term.lower()
+        
+        # Match table names
+        for table in tables:
+            if search_term_lower in table.lower():
+                matches.append(f"- **Table (Name Match)**: `{table}`")
+                
+            # Match columns
+            cursor.execute(f"PRAGMA table_info({table});")
+            cols = cursor.fetchall()
+            for col in cols:
+                col_name = col[1]
+                col_type = col[2]
+                if search_term_lower in col_name.lower():
+                    matches.append(f"- **Column**: `{table}.{col_name}` (Type: {col_type})")
+                    
+        # Match indexes
+        cursor.execute("SELECT name, tbl_name FROM sqlite_master WHERE type='index';")
+        indexes = cursor.fetchall()
+        for idx_name, tbl_name in indexes:
+            if search_term_lower in idx_name.lower():
+                matches.append(f"- **Index**: `{idx_name}` on table `{tbl_name}`")
+                
+        conn.close()
+        
+        if not matches:
+            return f"No schema matches found for term '{search_term}'."
+            
+        return f"### Schema Search Results for '{search_term}'\n" + "\n".join(matches)
+    except Exception as e:
+        return f"Error searching schema: {str(e)}"
+

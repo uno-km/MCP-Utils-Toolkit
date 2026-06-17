@@ -122,9 +122,9 @@ def create_server() -> FastMCP:
         return res
 
     @mcp.tool(name="db_execute_query", description="Execute a SQLite query safely. Modifying queries are blocked if read_only=True")
-    def tool_db_execute_query(db_path: str, query: str, read_only: bool = True) -> str:
-        res = db_consolidator.db_execute_query(db_path, query, read_only)
-        log_mcp_action("db_execute_query", {"db_path": db_path, "query": query, "read_only": read_only}, res)
+    def tool_db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown") -> str:
+        res = db_consolidator.db_execute_query(db_path, query, read_only, output_format)
+        log_mcp_action("db_execute_query", {"db_path": db_path, "query": query, "read_only": read_only, "output_format": output_format}, res)
         return res
 
     @mcp.tool(name="db_merge_tables", description="Merge table records from source SQLite DB into destination SQLite DB using a unique key column")
@@ -197,6 +197,24 @@ def create_server() -> FastMCP:
     def tool_db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str) -> str:
         res = db_consolidator.db_restore_time_travel(db_path, table_name, target_timestamp)
         log_mcp_action("db_restore_time_travel", {"db_path": db_path, "table_name": table_name, "target_timestamp": target_timestamp}, res)
+        return res
+
+    @mcp.tool(name="db_view_table_data", description="Browse and query table data with paging, sorting, filtering, and custom output formatting (markdown, json, csv, html, xml, plain)")
+    def tool_db_view_table_data(db_path: str, table_name: str, limit: int = 50, offset: int = 0, sort_by: str = None, sort_order: str = "DESC", filter_conditions: str = None, output_format: str = "markdown") -> str:
+        res = db_consolidator.db_view_table_data(db_path, table_name, limit, offset, sort_by, sort_order, filter_conditions, output_format)
+        log_mcp_action("db_view_table_data", {"db_path": db_path, "table_name": table_name, "limit": limit, "offset": offset, "output_format": output_format}, res)
+        return res
+
+    @mcp.tool(name="db_summarize_table", description="Generate a visual markdown profile containing column structures, record stats, and sample data for a table")
+    def tool_db_summarize_table(db_path: str, table_name: str) -> str:
+        res = db_consolidator.db_summarize_table(db_path, table_name)
+        log_mcp_action("db_summarize_table", {"db_path": db_path, "table_name": table_name}, res)
+        return res
+
+    @mcp.tool(name="db_search_schema", description="Find tables, columns, or indexes whose names contain the given search keyword")
+    def tool_db_search_schema(db_path: str, search_term: str) -> str:
+        res = db_consolidator.db_search_schema(db_path, search_term)
+        log_mcp_action("db_search_schema", {"db_path": db_path, "search_term": search_term}, res)
         return res
 
     # --- System & Developer Utilities ---
