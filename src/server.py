@@ -133,6 +133,72 @@ def create_server() -> FastMCP:
         log_mcp_action("db_merge_tables", {"src_db": src_db, "dest_db": dest_db, "table_name": table_name, "key_column": key_column}, res)
         return res
 
+    @mcp.tool(name="db_generate_erd", description="Generate a copy-pasteable Mermaid ER Diagram of a SQLite database schema")
+    def tool_db_generate_erd(db_path: str) -> str:
+        res = db_consolidator.db_generate_erd(db_path)
+        log_mcp_action("db_generate_erd", {"db_path": db_path}, res)
+        return res
+
+    @mcp.tool(name="db_generate_mock_data", description="Generate realistic mock data and insert it into a table respecting foreign keys")
+    def tool_db_generate_mock_data(db_path: str, table_name: str, count: int = 50) -> str:
+        res = db_consolidator.db_generate_mock_data(db_path, table_name, count)
+        log_mcp_action("db_generate_mock_data", {"db_path": db_path, "table_name": table_name, "count": count}, res)
+        return res
+
+    @mcp.tool(name="db_global_search_value", description="Search for a specific string value across all text columns of all tables in the database")
+    def tool_db_global_search_value(db_path: str, search_query: str) -> str:
+        res = db_consolidator.db_global_search_value(db_path, search_query)
+        log_mcp_action("db_global_search_value", {"db_path": db_path, "search_query": search_query}, res)
+        return res
+
+    @mcp.tool(name="db_transpile_sqlite_to_other", description="Transpile SQLite schema and data into PostgreSQL or MySQL DDL/DML script")
+    def tool_db_transpile_sqlite_to_other(db_path: str, target_dialect: str) -> str:
+        res = db_consolidator.db_transpile_sqlite_to_other(db_path, target_dialect)
+        log_mcp_action("db_transpile_sqlite_to_other", {"db_path": db_path, "target_dialect": target_dialect}, res)
+        return res
+
+    @mcp.tool(name="db_profile_and_scan_health", description="Scan database health: analyze indices, verify referential integrity, detect outliers")
+    def tool_db_profile_and_scan_health(db_path: str) -> str:
+        res = db_consolidator.db_profile_and_scan_health(db_path)
+        log_mcp_action("db_profile_and_scan_health", {"db_path": db_path}, res)
+        return res
+
+    @mcp.tool(name="db_format_sql", description="Beautify, uppercase keywords, and format raw SQL query for better readability")
+    def tool_db_format_sql(query: str) -> str:
+        res = db_consolidator.db_format_sql(query)
+        log_mcp_action("db_format_sql", {"query": query}, res)
+        return res
+
+    @mcp.tool(name="db_compare_schemas", description="Compare schemas of two databases and generate missing DDL synchronization script")
+    def tool_db_compare_schemas(src_db: str, dest_db: str) -> str:
+        res = db_consolidator.db_compare_schemas(src_db, dest_db)
+        log_mcp_action("db_compare_schemas", {"src_db": src_db, "dest_db": dest_db}, res)
+        return res
+
+    @mcp.tool(name="db_mask_table_data", description="Anonymize/mask sensitive table columns (GDPR-compliant email, name, phone masking)")
+    def tool_db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str) -> str:
+        res = db_consolidator.db_mask_table_data(db_path, table_name, mask_rules_json)
+        log_mcp_action("db_mask_table_data", {"db_path": db_path, "table_name": table_name, "mask_rules_json": mask_rules_json}, res)
+        return res
+
+    @mcp.tool(name="db_optimize_query_tuning", description="Analyze SQL query and suggest optimal missing CREATE INDEX index statements")
+    def tool_db_optimize_query_tuning(db_path: str, slow_query: str) -> str:
+        res = db_consolidator.db_optimize_query_tuning(db_path, slow_query)
+        log_mcp_action("db_optimize_query_tuning", {"db_path": db_path, "slow_query": slow_query}, res)
+        return res
+
+    @mcp.tool(name="db_enable_time_travel", description="Enable historical change logs (shadow ledger table + triggers) on a table")
+    def tool_db_enable_time_travel(db_path: str, table_name: str) -> str:
+        res = db_consolidator.db_enable_time_travel(db_path, table_name)
+        log_mcp_action("db_enable_time_travel", {"db_path": db_path, "table_name": table_name}, res)
+        return res
+
+    @mcp.tool(name="db_restore_time_travel", description="Restore table data state back to a specific timestamp in the past")
+    def tool_db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str) -> str:
+        res = db_consolidator.db_restore_time_travel(db_path, table_name, target_timestamp)
+        log_mcp_action("db_restore_time_travel", {"db_path": db_path, "table_name": table_name, "target_timestamp": target_timestamp}, res)
+        return res
+
     # --- System & Developer Utilities ---
     @mcp.tool(name="get_system_info", description="Get host system metrics (CPU, memory, disk usage, OS)")
     def tool_get_system_info() -> str:

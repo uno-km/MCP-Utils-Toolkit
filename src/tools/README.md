@@ -4,7 +4,7 @@
 
 ## 디렉토리 구조 및 역할
 
-- **database/**: SQLite 데이터베이스 연결 및 통합 데이터 연산을 처리합니다.
+- **database/**: SQLite 데이터베이스 연결 및 통합 데이터 연산을 처리합니다. ([상세 README](database/README.md))
   - 주요 도구: db_get_schema, db_execute_query, db_merge_tables
 - **document/**: 마크다운 변환 및 Docker 컨테이너 내 파일 조작을 담당합니다.
   - 주요 도구: convert_md_to_docx, delete_file_in_docker, move_file_in_docker
