@@ -103,11 +103,11 @@ def git_commit_and_push(repo_name: str, message: str) -> str:
         res = subprocess.run(["git", "remote", "get-url", "origin"], cwd=path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         if res.returncode == 0:
             auth_url = _get_auth_url(res.stdout.strip())
-            push_result = run_git_command(repo_name, ["push", auth_url])
+            push_result = run_git_command(repo_name, ["push", auth_url, "main"])
         else:
-            push_result = run_git_command(repo_name, ["push"])
+            push_result = run_git_command(repo_name, ["push", "origin", "main"])
     except Exception:
-        push_result = run_git_command(repo_name, ["push"])
+        push_result = run_git_command(repo_name, ["push", "origin", "main"])
         
     if "Error" in push_result:
         return f"Failed during git push:\n{push_result}"
