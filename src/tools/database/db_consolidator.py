@@ -16,6 +16,13 @@ def _get_connection(db_path: str):
         raise FileNotFoundError(f"Database file not found at {normalized_path}")
     return sqlite3.connect(normalized_path)
 
+def _validate_write_permission(client_token: str):
+    """Validate if the client token is authorized for CUD operations."""
+    expected_token = os.environ.get("AMEVA_DB_WRITE_TOKEN")
+    if expected_token:
+        if not client_token or client_token != expected_token:
+            raise PermissionError("Security Error: CUD (Write) operation is restricted. Invalid or missing client_token.")
+
 def db_get_schema(db_path: str) -> str:
     """Analyze and return schemas (tables, columns, SQL definition) of the SQLite database."""
     try:
@@ -118,7 +125,7 @@ def _format_output(headers: list, rows: list, output_format: str) -> str:
             
         return "\n".join([header_line, sep_line] + row_lines)
 
-def db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown") -> str:
+def db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown", client_token: str = None) -> str:
     """Execute a SQL query/command safely. In read-only mode, only SELECT/PRAGMA/EXPLAIN is permitted."""
     query_stripped = re.sub(r'/\*.*?\*/', '', query, flags=re.DOTALL).strip().upper()
     
@@ -128,6 +135,12 @@ def db_execute_query(db_path: str, query: str, read_only: bool = True, output_fo
         for kw in dangerous_keywords:
             if re.search(r'\b' + kw + r'\b', query_stripped):
                 return f"Security Error: Writing/Modifying operation '{kw}' is blocked in read-only mode."
+    else:
+        # Validate write permissions if client tries to run write operations
+        try:
+            _validate_write_permission(client_token)
+        except PermissionError as pe:
+            return str(pe)
         
     try:
         conn = _get_connection(db_path)
@@ -152,11 +165,16 @@ def db_execute_query(db_path: str, query: str, read_only: bool = True, output_fo
     except Exception as e:
         return f"Database Query Error: {str(e)}"
 
-def db_merge_tables(src_db: str, dest_db: str, table_name: str, key_column: str) -> str:
+def db_merge_tables(src_db: str, dest_db: str, table_name: str, key_column: str, client_token: str = None) -> str:
     """
     Merge data from src_db.table_name into dest_db.table_name.
     Inserts missing records and updates matching records using key_column.
     """
+    try:
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+        
     try:
         # Enforce path safety
         src_db = os.path.abspath(src_db)
@@ -269,19 +287,16 @@ def db_generate_erd(db_path: str) -> str:
             # Get foreign keys to mark them
             cursor.execute(f"PRAGMA foreign_key_list({table});")
             fks = cursor.fetchall()
-            fk_cols = {f[3]: f for f in fks if f[3]} # map child_column -> fk_info
+            fk_cols = {f[3]: f for f in fks if f[3]}
             
             for cid, col_name, col_type, notnull, dflt, pk in cols:
                 pk_flag = " PK" if pk else ""
                 fk_flag = " FK" if col_name in fk_cols else ""
-                # Clean type name for Mermaid compatibility
                 clean_type = re.sub(r'[^a-zA-Z0-9]', '', col_type).lower() or "text"
                 erd += f"        {clean_type} {col_name}{pk_flag}{fk_flag}\n"
             erd += "    }\n"
             
-            # Construct relationships: child_table ||--o{ parent_table : "references"
             for fk in fks:
-                # fk structure: (id, seq, table, from_col, to_col, on_update, on_delete, match)
                 parent_table = fk[2]
                 from_col = fk[3]
                 to_col = fk[4]
@@ -295,8 +310,13 @@ def db_generate_erd(db_path: str) -> str:
         return f"Error generating Mermaid ERD: {str(e)}"
 
 
-def db_generate_mock_data(db_path: str, table_name: str, count: int = 50) -> str:
+def db_generate_mock_data(db_path: str, table_name: str, count: int = 50, client_token: str = None) -> str:
     """Generate realistic mock data and populate the table automatically respecting FKs."""
+    try:
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+        
     try:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
@@ -314,7 +334,7 @@ def db_generate_mock_data(db_path: str, table_name: str, count: int = 50) -> str
         # Get foreign keys to resolve them dynamically
         cursor.execute(f"PRAGMA foreign_key_list({table_name});")
         fks = cursor.fetchall()
-        fk_map = {f[3]: f[2] for f in fks if f[3]} # col -> parent_table
+        fk_map = {f[3]: f[2] for f in fks if f[3]}
         
         # Pre-fetch parent table IDs to respect FK references
         parent_data = {}
@@ -337,7 +357,6 @@ def db_generate_mock_data(db_path: str, table_name: str, count: int = 50) -> str
         inserted = 0
         col_names = [c[1] for c in cols]
         
-        # Identify autoincrement integer PK to skip
         pk_col_info = next((c for c in cols if c[5]), None)
         is_integer_pk = pk_col_info and "INT" in pk_col_info[2].upper()
         
@@ -353,14 +372,12 @@ def db_generate_mock_data(db_path: str, table_name: str, count: int = 50) -> str
                 is_pk = col[5]
                 
                 if is_integer_pk and name == pk_col_info[1]:
-                    continue # Skip autoincrement
+                    continue
                     
-                # If it's a foreign key, pull from pre-fetched parent IDs
                 if name in parent_data:
                     row_data.append(random.choice(parent_data[name]))
                     continue
                     
-                # Heuristic data generators
                 name_lower = name.lower()
                 if "email" in name_lower:
                     row_data.append(f"{random.choice(first_names).lower()}{random.randint(10,99)}@{random.choice(domains)}")
@@ -410,7 +427,6 @@ def db_global_search_value(db_path: str, search_query: str) -> str:
             if not text_cols:
                 continue
                 
-            # Construct dynamic query
             where_clauses = " OR ".join([f"{col} LIKE ?" for col in text_cols])
             query = f"SELECT * FROM {table} WHERE {where_clauses};"
             
@@ -419,7 +435,7 @@ def db_global_search_value(db_path: str, search_query: str) -> str:
             rows = cursor.fetchall()
             
             if rows:
-                for row in rows[:10]: # Cap per table to avoid flooding
+                for row in rows[:10]:
                     matches.append(f"Table: {table} | Row: {row}")
                 if len(rows) > 10:
                     matches.append(f"Table: {table} | ... and {len(rows)-10} more matches.")
@@ -449,19 +465,15 @@ def db_transpile_sqlite_to_other(db_path: str, target_dialect: str) -> str:
         sql_script += f"-- Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         
         for table_name, create_sql in tables:
-            # Transpile create table
             new_ddl = create_sql
             if target_dialect == "postgresql":
-                # Convert INTEGER PRIMARY KEY AUTOINCREMENT -> SERIAL PRIMARY KEY
                 new_ddl = re.sub(
                     r'(?i)\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b', 
                     'SERIAL PRIMARY KEY', 
                     new_ddl
                 )
-                # Double quotes for table and column names to respect keywords if needed
-                new_ddl = new_ddl.replace('"', '') # Clean first
+                new_ddl = new_ddl.replace('"', '')
             elif target_dialect == "mysql":
-                # Convert AUTOINCREMENT -> AUTO_INCREMENT
                 new_ddl = re.sub(
                     r'(?i)\bAUTOINCREMENT\b', 
                     'AUTO_INCREMENT', 
@@ -470,7 +482,6 @@ def db_transpile_sqlite_to_other(db_path: str, target_dialect: str) -> str:
                 
             sql_script += f"{new_ddl};\n\n"
             
-            # Fetch and dump data
             cursor.execute(f"PRAGMA table_info({table_name});")
             cols = [c[1] for c in cursor.fetchall()]
             
@@ -488,7 +499,6 @@ def db_transpile_sqlite_to_other(db_path: str, target_dialect: str) -> str:
                         elif isinstance(v, (int, float)):
                             val_list.append(str(v))
                         else:
-                            # Escape single quotes
                             escaped = str(v).replace("'", "''")
                             val_list.append(f"'{escaped}'")
                     val_str = ", ".join(val_list)
@@ -507,13 +517,11 @@ def db_profile_and_scan_health(db_path: str) -> str:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Get tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
         tables = [r[0] for r in cursor.fetchall()]
         
         report = f"=== DATABASE HEALTH & ANOMALY REPORT ===\n\n"
         
-        # 1. Check duplicate indexes
         cursor.execute("SELECT name, tbl_name FROM sqlite_master WHERE type='index';")
         indices = cursor.fetchall()
         idx_info = {}
@@ -535,7 +543,6 @@ def db_profile_and_scan_health(db_path: str) -> str:
             report += "  - OK: No duplicate indexes found.\n"
         report += "\n"
         
-        # 2. Check Orphan Foreign Keys (FK validation)
         report += "2. Referential Integrity / Orphan Row Check:\n"
         orphans_found = False
         for table in tables:
@@ -544,9 +551,8 @@ def db_profile_and_scan_health(db_path: str) -> str:
             for fk in fks:
                 parent_table = fk[2]
                 child_col = fk[3]
-                parent_col = fk[4] or "id" # default pk fallback
+                parent_col = fk[4] or "id"
                 
-                # Scan for orphans: child rows whose FK points to non-existent parent PK
                 query = f"SELECT COUNT(*) FROM {table} WHERE {child_col} NOT IN (SELECT {parent_col} FROM {parent_table}) AND {child_col} IS NOT NULL;"
                 cursor.execute(query)
                 orphans = cursor.fetchone()[0]
@@ -557,7 +563,6 @@ def db_profile_and_scan_health(db_path: str) -> str:
             report += "  - OK: No orphan records found. Referential integrity intact.\n"
         report += "\n"
         
-        # 3. Scan high NULL rates and Numeric Outliers
         report += "3. Columns Data Profiling & Anomalies:\n"
         for table in tables:
             cursor.execute(f"SELECT COUNT(*) FROM {table};")
@@ -569,16 +574,13 @@ def db_profile_and_scan_health(db_path: str) -> str:
             cursor.execute(f"PRAGMA table_info({table});")
             cols = cursor.fetchall()
             for cid, col_name, col_type, notnull, dflt, pk in cols:
-                # NULL Rate
                 cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE {col_name} IS NULL;")
                 nulls = cursor.fetchone()[0]
                 null_rate = (nulls / total_rows) * 100
                 if null_rate > 50:
                     report += f"  - WARNING: Table '{table}' column '{col_name}' has a high NULL rate of {null_rate:.1f}%.\n"
                     
-                # Numeric Outliers (using 3-sigma rule: values exceeding mean + 3*stddev)
                 if any(t in col_type.upper() for t in ["INT", "REAL", "NUM", "FLOAT", "DOUBLE"]):
-                    # Calculate mean & stddev
                     cursor.execute(f"SELECT AVG({col_name}), AVG({col_name}*{col_name}) FROM {table} WHERE {col_name} IS NOT NULL;")
                     stats = cursor.fetchone()
                     if stats and stats[0] is not None:
@@ -602,7 +604,6 @@ def db_profile_and_scan_health(db_path: str) -> str:
 
 def db_format_sql(query: str) -> str:
     """Beautify, uppercase keywords, and format raw SQL string into pretty, readable SQL."""
-    # List of common SQL keywords to uppercase
     keywords = [
         r"\bselect\b", r"\bfrom\b", r"\bwhere\b", r"\bjoin\b", r"\bleft\b", r"\bright\b", r"\bouter\b",
         r"\binner\b", r"\bon\b", r"\bgroup\b", r"\bby\b", r"\border\b", r"\bhaving\b", r"\blimit\b",
@@ -612,17 +613,13 @@ def db_format_sql(query: str) -> str:
     
     formatted = query.strip()
     
-    # Capitalize keywords
     for kw in keywords:
         formatted = re.sub(kw, lambda m: m.group(0).upper(), formatted, flags=re.IGNORECASE)
         
-    # Standard format: Insert line breaks before major query statements
     major_clauses = ["FROM", "WHERE", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "JOIN", "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "SET", "VALUES"]
     for clause in major_clauses:
-        # Avoid double line breaks if already formatted
         formatted = re.sub(r'\s+\b' + clause + r'\b', f'\n{clause}', formatted)
         
-    # Indent elements inside parenthesis slightly (basic nesting heuristic)
     return formatted
 
 
@@ -639,7 +636,6 @@ def db_compare_schemas(src_db: str, dest_db: str) -> str:
         dest_conn = sqlite3.connect(dest_db)
         dest_cursor = dest_conn.cursor()
         
-        # Get schemas
         src_cursor.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
         src_tables = {r[0]: r[1] for r in src_cursor.fetchall()}
         
@@ -649,18 +645,16 @@ def db_compare_schemas(src_db: str, dest_db: str) -> str:
         diff_script = f"-- Schema Sync Script: {dest_db} -> match {src_db}\n\n"
         changes_detected = False
         
-        # 1. Find missing tables in target
         for table, create_sql in src_tables.items():
             if table not in dest_tables:
                 diff_script += f"-- Table '{table}' is missing in target. Creating...\n"
                 diff_script += f"{create_sql};\n\n"
                 changes_detected = True
                 
-        # 2. Find missing columns in target tables
         for table, create_sql in src_tables.items():
             if table in dest_tables:
                 src_cursor.execute(f"PRAGMA table_info({table});")
-                src_cols = {r[1]: (r[2], r[3], r[4]) for r in src_cursor.fetchall()} # name -> (type, notnull, default)
+                src_cols = {r[1]: (r[2], r[3], r[4]) for r in src_cursor.fetchall()}
                 
                 dest_cursor.execute(f"PRAGMA table_info({table});")
                 dest_cols = {r[1] for r in dest_cursor.fetchall()}
@@ -685,10 +679,15 @@ def db_compare_schemas(src_db: str, dest_db: str) -> str:
         return f"Error during schema comparison: {str(e)}"
 
 
-def db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str) -> str:
+def db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str, client_token: str = None) -> str:
     """Mask sensitive columns inside a table based on GDPR-compliant rules."""
     try:
-        rules = json.loads(mask_rules_json) # {"email": "mask_email", "name": "mask_name"}
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+        
+    try:
+        rules = json.loads(mask_rules_json)
     except Exception as e:
         return f"Error: Invalid mask_rules_json format: {str(e)}"
         
@@ -696,30 +695,25 @@ def db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str) -> s
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Verify table
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
         if not cursor.fetchone():
             conn.close()
             return f"Table '{table_name}' does not exist."
             
-        # Get columns
         cursor.execute(f"PRAGMA table_info({table_name});")
         table_cols = [c[1] for c in cursor.fetchall()]
         
-        # Validate rule columns
         for col in rules.keys():
             if col not in table_cols:
                 conn.close()
                 return f"Error: Column '{col}' not found in table '{table_name}'."
                 
-        # Fetch rows
         cursor.execute(f"SELECT rowid, * FROM {table_name};")
         rows = cursor.fetchall()
         
         updated = 0
         for row in rows:
             rowid = row[0]
-            # Map column name to index (shifted by 1 due to rowid)
             row_dict = {table_cols[i]: row[i+1] for i in range(len(table_cols))}
             
             update_clauses = []
@@ -733,7 +727,6 @@ def db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str) -> s
                 val_str = str(val)
                 masked_val = val_str
                 
-                # Apply masking heuristics
                 if rule == "mask_email":
                     if "@" in val_str:
                         local, domain = val_str.split("@", 1)
@@ -747,7 +740,6 @@ def db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str) -> s
                     else:
                         masked_val = "*"
                 elif rule == "mask_phone":
-                    # Mask middle 4 numbers of 010-1234-5678 or similar
                     clean_phone = re.sub(r'[^0-9]', '', val_str)
                     if len(clean_phone) >= 10:
                         masked_val = f"{val_str[:3]}-****-{val_str[-4:]}"
@@ -781,7 +773,6 @@ def db_optimize_query_tuning(db_path: str, slow_query: str) -> str:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Analyze using EXPLAIN QUERY PLAN
         explain_query = f"EXPLAIN QUERY PLAN {slow_query}"
         cursor.execute(explain_query)
         plan_rows = cursor.fetchall()
@@ -790,29 +781,21 @@ def db_optimize_query_tuning(db_path: str, slow_query: str) -> str:
         tuning_report = "=== SQL QUERY PLAN ANALYSIS ===\n\n"
         
         for row in plan_rows:
-            # Plan format: (selectid, order, from, detail)
             detail = row[3]
             tuning_report += f"Plan detail: {detail}\n"
             
-            # Check for Table Scans (SCAN TABLE) which indicates no index used
             if "SCAN TABLE" in detail:
                 match = re.search(r'SCAN TABLE (\w+)', detail)
                 if match:
                     table_name = match.group(1)
                     
-                    # Try to extract search condition columns for that table from query
-                    # Look in WHERE clause for columns relating to this table
                     where_match = re.search(r'(?i)WHERE\s+(.*)', slow_query)
                     candidate_cols = []
                     if where_match:
                         where_clause = where_match.group(1)
-                        # Find identifiers comparing to table columns
-                        # e.g., table.col = ? or col = ?
-                        # Basic regex helper
                         cols_in_where = re.findall(r'\b(?:' + table_name + r'\.)?(\w+)\s*[=<>!]+', where_clause)
                         candidate_cols.extend([c for c in cols_in_where if c.lower() not in ["null", "true", "false"]])
                         
-                    # Remove duplicates while keeping order
                     seen = set()
                     candidate_cols = [c for c in candidate_cols if not (c in seen or seen.add(c))]
                     
@@ -836,25 +819,27 @@ def db_optimize_query_tuning(db_path: str, slow_query: str) -> str:
         return f"Error during query optimization analysis: {str(e)}"
 
 
-def db_enable_time_travel(db_path: str, table_name: str) -> str:
+def db_enable_time_travel(db_path: str, table_name: str, client_token: str = None) -> str:
     """Enable time travel audit log shadow table and triggers for mutating operations."""
+    try:
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+        
     try:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Verify table
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
         if not cursor.fetchone():
             conn.close()
             return f"Table '{table_name}' does not exist."
             
-        # Get columns to build JSON formatters
         cursor.execute(f"PRAGMA table_info({table_name});")
         cols = [c[1] for c in cursor.fetchall()]
         
         ledger_table = f"{table_name}_ledger"
         
-        # Create Ledger Table
         create_ledger_sql = f"""
         CREATE TABLE IF NOT EXISTS {ledger_table} (
             ledger_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -867,17 +852,13 @@ def db_enable_time_travel(db_path: str, table_name: str) -> str:
         """
         cursor.execute(create_ledger_sql)
         
-        # Generate JSON construction parts for OLD and NEW rows
-        # SQLite json_object('col1', OLD.col1, 'col2', OLD.col2)
         old_json = "json_object(" + ", ".join([f"'{c}', OLD.{c}" for c in cols]) + ")"
         new_json = "json_object(" + ", ".join([f"'{c}', NEW.{c}" for c in cols]) + ")"
         
-        # Drop existing triggers if any to prevent conflicts
         cursor.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_insert;")
         cursor.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_update;")
         cursor.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_delete;")
         
-        # 1. Trigger Insert
         trg_insert = f"""
         CREATE TRIGGER trg_{table_name}_insert AFTER INSERT ON {table_name}
         BEGIN
@@ -886,7 +867,6 @@ def db_enable_time_travel(db_path: str, table_name: str) -> str:
         END;
         """
         
-        # 2. Trigger Update
         trg_update = f"""
         CREATE TRIGGER trg_{table_name}_update AFTER UPDATE ON {table_name}
         BEGIN
@@ -895,7 +875,6 @@ def db_enable_time_travel(db_path: str, table_name: str) -> str:
         END;
         """
         
-        # 3. Trigger Delete
         trg_delete = f"""
         CREATE TRIGGER trg_{table_name}_delete AFTER DELETE ON {table_name}
         BEGIN
@@ -915,63 +894,58 @@ def db_enable_time_travel(db_path: str, table_name: str) -> str:
         return f"Error enabling time travel: {str(e)}"
 
 
-def db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str) -> str:
+def db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str, client_token: str = None) -> str:
     """Restore table data back to a specific timestamp by executing mutations in reverse."""
+    try:
+        _validate_write_permission(client_token)
+    except PermissionError as pe:
+        return str(pe)
+        
     try:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
         ledger_table = f"{table_name}_ledger"
         
-        # Verify ledger table
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{ledger_table}';")
         if not cursor.fetchone():
             conn.close()
             return f"Time travel ledger '{ledger_table}' does not exist. Enable it first using db_enable_time_travel."
             
-        # Get column definitions of target table to insert correctly
         cursor.execute(f"PRAGMA table_info({table_name});")
         cols = [c[1] for c in cursor.fetchall()]
         
-        # Find PK column to match updates
         cursor.execute(f"PRAGMA table_info({table_name});")
         pk_col = next((c[1] for c in cursor.fetchall() if c[5]), None)
         
-        # Temporarily disable triggers on target table to avoid logging the restore itself
         cursor.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_insert;")
         cursor.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_update;")
         cursor.execute(f"DROP TRIGGER IF EXISTS trg_{table_name}_delete;")
         
-        # Fetch ledger entries since target_timestamp in REVERSE chronological order
         cursor.execute(f"SELECT operation, row_id, old_data, new_data, ledger_id FROM {ledger_table} WHERE changed_at > ? ORDER BY ledger_id DESC;", (target_timestamp,))
         ledger_rows = cursor.fetchall()
         
         if not ledger_rows:
-            # Restore triggers before returning
             conn.close()
-            db_enable_time_travel(db_path, table_name)
+            db_enable_time_travel(db_path, table_name, client_token=client_token)
             return f"No changes detected since timestamp '{target_timestamp}'. Database is already at this state."
             
         restored_count = 0
         
         for op, row_id, old_data_json, new_data_json, ledger_id in ledger_rows:
             if op == "INSERT":
-                # To reverse an INSERT, delete the row
                 cursor.execute(f"DELETE FROM {table_name} WHERE rowid=?;", (row_id,))
             elif op == "DELETE":
-                # To reverse a DELETE, insert the OLD data back
                 old_data = json.loads(old_data_json)
                 col_names = ", ".join(old_data.keys())
                 placeholders = ", ".join(["?"] * len(old_data))
                 vals = list(old_data.values())
                 cursor.execute(f"INSERT INTO {table_name} ({col_names}) VALUES ({placeholders});", vals)
             elif op == "UPDATE":
-                # To reverse an UPDATE, apply the OLD data state
                 old_data = json.loads(old_data_json)
                 set_clause = ", ".join([f"{k}=?" for k in old_data.keys()])
                 vals = list(old_data.values())
                 
-                # Try using PK if exists, otherwise fall back to rowid (rowid might change on restore-inserts, so pk is preferred)
                 if pk_col and pk_col in old_data:
                     pk_val = old_data[pk_col]
                     vals.append(pk_val)
@@ -982,20 +956,17 @@ def db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str)
                     
             restored_count += 1
             
-        # Clear ledger records that have been undone
         cursor.execute(f"DELETE FROM {ledger_table} WHERE changed_at > ?;", (target_timestamp,))
         
         conn.commit()
         conn.close()
         
-        # Re-enable triggers
-        db_enable_time_travel(db_path, table_name)
+        db_enable_time_travel(db_path, table_name, client_token=client_token)
         
         return f"Successfully restored '{table_name}' back to '{target_timestamp}'. Undid {restored_count} database mutations."
     except Exception as e:
-        # Re-enable triggers on error
         try:
-            db_enable_time_travel(db_path, table_name)
+            db_enable_time_travel(db_path, table_name, client_token=client_token)
         except:
             pass
         return f"Error during time-travel restore operation: {str(e)}"
@@ -1007,27 +978,19 @@ def db_view_table_data(db_path: str, table_name: str, limit: int = 50, offset: i
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Verify table
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
         if not cursor.fetchone():
             conn.close()
             return f"Error: Table '{table_name}' does not exist in the database."
             
-        # Get columns
         cursor.execute(f"PRAGMA table_info({table_name});")
         cols = [c[1] for c in cursor.fetchall()]
         
-        # Build query
         query = f"SELECT * FROM {table_name}"
         params = []
         
-        # Apply filters safely (basic string validation to prevent SQL injections on column names)
         if filter_conditions:
-            # Simple check: only allow safe conditions with basic operators
-            # Validate columns in filter
             words = re.findall(r'\b\w+\b', filter_conditions)
-            # Ensure words matching columns are actually in the table columns
-            # To allow basic filters like "id=5" or "status='ACTIVE'"
             query += f" WHERE {filter_conditions}"
             
         if sort_by:
@@ -1056,21 +1019,17 @@ def db_summarize_table(db_path: str, table_name: str) -> str:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Verify table
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
         if not cursor.fetchone():
             conn.close()
             return f"Error: Table '{table_name}' does not exist."
             
-        # Get total rows
         cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
         row_count = cursor.fetchone()[0]
         
-        # Get columns
         cursor.execute(f"PRAGMA table_info({table_name});")
         cols = cursor.fetchall()
         
-        # Get sample data
         cursor.execute(f"SELECT * FROM {table_name} LIMIT 5;")
         samples = cursor.fetchall()
         col_names = [c[1] for c in cols]
@@ -1089,7 +1048,6 @@ def db_summarize_table(db_path: str, table_name: str) -> str:
             report += f"| {cid} | `{name}` | {col_type} | {nn_str} | `{dflt_str}` | {pk_str} |\n"
         report += "\n"
         
-        # Add numeric stats for numeric columns
         report += "### Numeric Column Profiling\n"
         num_cols = [c[1] for c in cols if any(t in c[2].upper() for t in ["INT", "REAL", "NUM", "FLOAT", "DOUBLE"])]
         if num_cols:
@@ -1123,19 +1081,16 @@ def db_search_schema(db_path: str, search_term: str) -> str:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         
-        # Find matching tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
         tables = [r[0] for r in cursor.fetchall()]
         
         matches = []
         search_term_lower = search_term.lower()
         
-        # Match table names
         for table in tables:
             if search_term_lower in table.lower():
                 matches.append(f"- **Table (Name Match)**: `{table}`")
                 
-            # Match columns
             cursor.execute(f"PRAGMA table_info({table});")
             cols = cursor.fetchall()
             for col in cols:
@@ -1144,7 +1099,6 @@ def db_search_schema(db_path: str, search_term: str) -> str:
                 if search_term_lower in col_name.lower():
                     matches.append(f"- **Column**: `{table}.{col_name}` (Type: {col_type})")
                     
-        # Match indexes
         cursor.execute("SELECT name, tbl_name FROM sqlite_master WHERE type='index';")
         indexes = cursor.fetchall()
         for idx_name, tbl_name in indexes:
@@ -1159,4 +1113,3 @@ def db_search_schema(db_path: str, search_term: str) -> str:
         return f"### Schema Search Results for '{search_term}'\n" + "\n".join(matches)
     except Exception as e:
         return f"Error searching schema: {str(e)}"
-

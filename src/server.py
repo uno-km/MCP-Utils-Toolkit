@@ -122,15 +122,15 @@ def create_server() -> FastMCP:
         return res
 
     @mcp.tool(name="db_execute_query", description="Execute a SQLite query safely. Modifying queries are blocked if read_only=True")
-    def tool_db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown") -> str:
-        res = db_consolidator.db_execute_query(db_path, query, read_only, output_format)
-        log_mcp_action("db_execute_query", {"db_path": db_path, "query": query, "read_only": read_only, "output_format": output_format}, res)
+    def tool_db_execute_query(db_path: str, query: str, read_only: bool = True, output_format: str = "markdown", client_token: str = None) -> str:
+        res = db_consolidator.db_execute_query(db_path, query, read_only, output_format, client_token)
+        log_mcp_action("db_execute_query", {"db_path": db_path, "query": query, "read_only": read_only, "output_format": output_format, "client_token": client_token}, res)
         return res
 
     @mcp.tool(name="db_merge_tables", description="Merge table records from source SQLite DB into destination SQLite DB using a unique key column")
-    def tool_db_merge_tables(src_db: str, dest_db: str, table_name: str, key_column: str) -> str:
-        res = db_consolidator.db_merge_tables(src_db, dest_db, table_name, key_column)
-        log_mcp_action("db_merge_tables", {"src_db": src_db, "dest_db": dest_db, "table_name": table_name, "key_column": key_column}, res)
+    def tool_db_merge_tables(src_db: str, dest_db: str, table_name: str, key_column: str, client_token: str = None) -> str:
+        res = db_consolidator.db_merge_tables(src_db, dest_db, table_name, key_column, client_token)
+        log_mcp_action("db_merge_tables", {"src_db": src_db, "dest_db": dest_db, "table_name": table_name, "key_column": key_column, "client_token": client_token}, res)
         return res
 
     @mcp.tool(name="db_generate_erd", description="Generate a copy-pasteable Mermaid ER Diagram of a SQLite database schema")
@@ -140,9 +140,9 @@ def create_server() -> FastMCP:
         return res
 
     @mcp.tool(name="db_generate_mock_data", description="Generate realistic mock data and insert it into a table respecting foreign keys")
-    def tool_db_generate_mock_data(db_path: str, table_name: str, count: int = 50) -> str:
-        res = db_consolidator.db_generate_mock_data(db_path, table_name, count)
-        log_mcp_action("db_generate_mock_data", {"db_path": db_path, "table_name": table_name, "count": count}, res)
+    def tool_db_generate_mock_data(db_path: str, table_name: str, count: int = 50, client_token: str = None) -> str:
+        res = db_consolidator.db_generate_mock_data(db_path, table_name, count, client_token)
+        log_mcp_action("db_generate_mock_data", {"db_path": db_path, "table_name": table_name, "count": count, "client_token": client_token}, res)
         return res
 
     @mcp.tool(name="db_global_search_value", description="Search for a specific string value across all text columns of all tables in the database")
@@ -176,9 +176,9 @@ def create_server() -> FastMCP:
         return res
 
     @mcp.tool(name="db_mask_table_data", description="Anonymize/mask sensitive table columns (GDPR-compliant email, name, phone masking)")
-    def tool_db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str) -> str:
-        res = db_consolidator.db_mask_table_data(db_path, table_name, mask_rules_json)
-        log_mcp_action("db_mask_table_data", {"db_path": db_path, "table_name": table_name, "mask_rules_json": mask_rules_json}, res)
+    def tool_db_mask_table_data(db_path: str, table_name: str, mask_rules_json: str, client_token: str = None) -> str:
+        res = db_consolidator.db_mask_table_data(db_path, table_name, mask_rules_json, client_token)
+        log_mcp_action("db_mask_table_data", {"db_path": db_path, "table_name": table_name, "mask_rules_json": mask_rules_json, "client_token": client_token}, res)
         return res
 
     @mcp.tool(name="db_optimize_query_tuning", description="Analyze SQL query and suggest optimal missing CREATE INDEX index statements")
@@ -188,15 +188,15 @@ def create_server() -> FastMCP:
         return res
 
     @mcp.tool(name="db_enable_time_travel", description="Enable historical change logs (shadow ledger table + triggers) on a table")
-    def tool_db_enable_time_travel(db_path: str, table_name: str) -> str:
-        res = db_consolidator.db_enable_time_travel(db_path, table_name)
-        log_mcp_action("db_enable_time_travel", {"db_path": db_path, "table_name": table_name}, res)
+    def tool_db_enable_time_travel(db_path: str, table_name: str, client_token: str = None) -> str:
+        res = db_consolidator.db_enable_time_travel(db_path, table_name, client_token)
+        log_mcp_action("db_enable_time_travel", {"db_path": db_path, "table_name": table_name, "client_token": client_token}, res)
         return res
 
     @mcp.tool(name="db_restore_time_travel", description="Restore table data state back to a specific timestamp in the past")
-    def tool_db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str) -> str:
-        res = db_consolidator.db_restore_time_travel(db_path, table_name, target_timestamp)
-        log_mcp_action("db_restore_time_travel", {"db_path": db_path, "table_name": table_name, "target_timestamp": target_timestamp}, res)
+    def tool_db_restore_time_travel(db_path: str, table_name: str, target_timestamp: str, client_token: str = None) -> str:
+        res = db_consolidator.db_restore_time_travel(db_path, table_name, target_timestamp, client_token)
+        log_mcp_action("db_restore_time_travel", {"db_path": db_path, "table_name": table_name, "target_timestamp": target_timestamp, "client_token": client_token}, res)
         return res
 
     @mcp.tool(name="db_view_table_data", description="Browse and query table data with paging, sorting, filtering, and custom output formatting (markdown, json, csv, html, xml, plain)")
