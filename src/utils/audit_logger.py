@@ -6,7 +6,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-AUDIT_LOG_PATH = r"C:\ameva\AMEVA-MCP-Toolkit-Utils\mcp_audit.jsonl"
+AUDIT_LOG_PATH = "/app/workspace/AMEVA-MCP-Toolkit-Utils/mcp_audit.jsonl" if os.environ.get("AMEVA_IN_CONTAINER") == "true" else r"C:\ameva\AMEVA-MCP-Toolkit-Utils\mcp_audit.jsonl"
+
 MAX_RETRIES = 5
 RETRY_DELAY = 0.01  # 10ms
 
