@@ -53,6 +53,54 @@ def create_server() -> FastMCP:
         log_mcp_action("git_commit_and_push", {"repo": repo_name, "msg": commit_message}, res)
         return res
 
+    @mcp.tool(name="git_clone", description="Clone a remote git repository to the local system under the specified folder name")
+    def tool_git_clone(repo_url: str, repo_name: str) -> str:
+        res = git_manager.git_clone(repo_url, repo_name)
+        log_mcp_action("git_clone", {"url": repo_url, "repo_name": repo_name}, res)
+        return res
+
+    @mcp.tool(name="git_log", description="Get the git commit log/history (e.g. limit=10 commits)")
+    def tool_git_log(repo_name: str, limit: int = 10) -> str:
+        res = git_manager.git_log(repo_name, limit)
+        log_mcp_action("git_log", {"repo": repo_name, "limit": limit}, res)
+        return res
+
+    @mcp.tool(name="git_diff", description="Get git diff comparison of modified files in working directory")
+    def tool_git_diff(repo_name: str, file_path: str = None) -> str:
+        res = git_manager.git_diff(repo_name, file_path)
+        log_mcp_action("git_diff", {"repo": repo_name, "file_path": file_path}, res)
+        return res
+
+    @mcp.tool(name="git_branch", description="Manage git branches. action can be: 'list', 'new', 'delete'")
+    def tool_git_branch(repo_name: str, action: str = "list", branch_name: str = None) -> str:
+        res = git_manager.git_branch(repo_name, action, branch_name)
+        log_mcp_action("git_branch", {"repo": repo_name, "action": action, "branch_name": branch_name}, res)
+        return res
+
+    @mcp.tool(name="git_checkout", description="Checkout branch or restore files. Set create=True to create a new branch (-b)")
+    def tool_git_checkout(repo_name: str, branch_or_file: str, create: bool = False) -> str:
+        res = git_manager.git_checkout(repo_name, branch_or_file, create)
+        log_mcp_action("git_checkout", {"repo": repo_name, "target": branch_or_file, "create": create}, res)
+        return res
+
+    @mcp.tool(name="git_merge", description="Merge a specified branch into the current branch")
+    def tool_git_merge(repo_name: str, branch_name: str) -> str:
+        res = git_manager.git_merge(repo_name, branch_name)
+        log_mcp_action("git_merge", {"repo": repo_name, "branch": branch_name}, res)
+        return res
+
+    @mcp.tool(name="git_reset", description="Reset current HEAD to a state. mode: 'soft', 'mixed', 'hard'")
+    def tool_git_reset(repo_name: str, mode: str = "mixed", commit_hash: str = "HEAD") -> str:
+        res = git_manager.git_reset(repo_name, mode, commit_hash)
+        log_mcp_action("git_reset", {"repo": repo_name, "mode": mode, "commit": commit_hash}, res)
+        return res
+
+    @mcp.tool(name="git_stash", description="Stash local changes. action: 'push', 'pop', 'list', 'apply', 'clear'")
+    def tool_git_stash(repo_name: str, action: str = "push", stash_id: str = None) -> str:
+        res = git_manager.git_stash(repo_name, action, stash_id)
+        log_mcp_action("git_stash", {"repo": repo_name, "action": action, "stash_id": stash_id}, res)
+        return res
+
     @mcp.tool(name="ssh_run_command", description="Run a shell command on a remote server via SSH")
     def tool_ssh_run_command(host: str, username: str, command: str, port: int = 22, password: str = None, key_content: str = None) -> str:
         res = ssh_manager.ssh_run_command(host, username, command, port, password, key_content)
