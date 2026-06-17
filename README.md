@@ -18,6 +18,45 @@ AMEVA 에이전트 생태계의 자동화 및 개발 생산성 향상을 위한 
 
 ---
 
+## 제공 API 및 도구 명세 (API & Tool Reference)
+
+전체 도구 API 리스트 및 요약 정보입니다. 상세 파라미터 정보 및 AI 활용 사례는 각 명세서 문서를 참고하십시오.
+
+### 1. Git 도구군 (GIT)
+> [상세 명세서 바로가기 (Git API Spec)](docs/git_tools_spec.md)
+
+| 도구명 (Tool Name) | 설명 (Description) | 주요 파라미터 (Main Params) |
+| :--- | :--- | :--- |
+| `git_status` | 리포지토리의 작업 공간 상태 조회 (`git status -sb`) | `repo_name` |
+| `git_log` | 커밋 로그 내역 조회 (단선 형태 그래프 출력) | `repo_name`, `limit` |
+| `git_diff` | 수정되거나 스테이징된 변경 사항 비교 | `repo_name`, `file_path` |
+| `git_clone` | 원격 저장소를 로컬 컴퓨터로 복제 | `repo_url`, `repo_name` |
+| `git_pull` | 원격 저장소의 최신 커밋 풀 및 병합 | `repo_name` |
+| `git_commit_and_push` | 전체 추가(`git add .`), 커밋 및 원격지 푸시 | `repo_name`, `commit_message` |
+| `git_branch` | 브랜치 목록 조회, 신규 생성 및 삭제 | `repo_name`, `action`, `branch_name` |
+| `git_checkout` | 브랜치 전환(신규 생성 포함) 및 파일 복구 | `repo_name`, `branch_or_file`, `create` |
+| `git_merge` | 특정 브랜치를 현재 활성화된 브랜치에 병합 | `repo_name`, `branch_name` |
+| `git_reset` | 현재 HEAD 포인터를 특정 해시로 복구/이동 | `repo_name`, `mode`, `commit_hash` |
+| `git_stash` | 로컬 변경분을 임시 공간으로 대피 또는 복구 | `repo_name`, `action`, `stash_id` |
+
+### 2. 시스템 및 유틸리티 도구군 (UTILS)
+> [상세 명세서 바로가기 (Utils API Spec)](docs/utils_tools_spec.md)
+
+| 도구명 (Tool Name) | 설명 (Description) | 주요 파라미터 (Main Params) |
+| :--- | :--- | :--- |
+| `get_system_info` | CPU, Memory, Disk 등 호스트 상태 지표 확인 | 없음 |
+| `check_port` | 특정 호스트의 TCP 포트 개방 상태 진단 | `host`, `port` |
+| `generate_uuid` | 고유한 UUID v4 문자열 무작위 생성 | 없음 |
+| `format_json` | JSON 문자열 구문 검증 및 들여쓰기 정렬 포맷팅 | `json_str` |
+| `base64_encode_decode` | Base64 인코딩 및 디코딩 기능 지원 | `mode`, `data` |
+| `calculate_file_hash` | 파일 무결성 확인용 해시(MD5/SHA256) 연산 | `file_path`, `algorithm` |
+| `get_external_ip` | 내부 로컬 및 외부 공인 IP 주소 조회 | 없음 |
+| `send_http_request` | REST API 테스트를 위한 HTTP 요청 송신 | `method`, `url`, `headers_json`, `body` |
+| `find_large_files` | 디렉토리 내 대용량 파일 탐색 | `dir_path`, `size_mb` |
+| `extract_text_from_url` | HTML 문서를 제거한 순수 텍스트 본문 추출 | `url` |
+
+---
+
 ## 설계 중점 사항 (Key Focus)
 
 - **도구 도메인 분류 명세화**: `DOC`, `GIT`, `CODE`, `INF` 등 도구의 특성에 맞게 I/O 모델과 성능 락킹 범위를 구분하여 동작 안정성을 도모합니다.
