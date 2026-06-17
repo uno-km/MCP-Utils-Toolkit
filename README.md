@@ -23,7 +23,7 @@ AMEVA 에이전트 생태계의 자동화 및 개발 생산성 향상을 위한 
 전체 도구 API 리스트 및 요약 정보입니다. 상세 파라미터 정보 및 AI 활용 사례는 각 명세서 문서를 참고하십시오.
 
 ### 1. Git 도구군 (GIT)
-> [상세 명세서 바로가기 (Git API Spec)](docs/git_tools_spec.md)
+> [상세 명세서 바로가기 (Git API Spec)](src/tools/git/README.md)
 
 | 도구명 (Tool Name) | 설명 (Description) | 주요 파라미터 (Main Params) |
 | :--- | :--- | :--- |
@@ -40,7 +40,7 @@ AMEVA 에이전트 생태계의 자동화 및 개발 생산성 향상을 위한 
 | `git_stash` | 로컬 변경분을 임시 공간으로 대피 또는 복구 | `repo_name`, `action`, `stash_id` |
 
 ### 2. 시스템 및 유틸리티 도구군 (UTILS)
-> [상세 명세서 바로가기 (Utils API Spec)](docs/utils_tools_spec.md)
+> [상세 명세서 바로가기 (Utils API Spec)](src/tools/utils/README.md)
 
 | 도구명 (Tool Name) | 설명 (Description) | 주요 파라미터 (Main Params) |
 | :--- | :--- | :--- |
