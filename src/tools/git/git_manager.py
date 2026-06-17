@@ -106,8 +106,14 @@ def git_commit_and_push(repo_name: str, message: str) -> str:
             push_result = run_git_command(repo_name, ["push", auth_url, "main"])
         else:
             push_result = run_git_command(repo_name, ["push", "origin", "main"])
+        # Fetch to update local refs/remotes/origin/main tracking branch
+        run_git_command(repo_name, ["fetch"])
     except Exception:
         push_result = run_git_command(repo_name, ["push", "origin", "main"])
+        try:
+            run_git_command(repo_name, ["fetch"])
+        except:
+            pass
         
     if "Error" in push_result:
         return f"Failed during git push:\n{push_result}"
