@@ -1,0 +1,40 @@
+name: Notify AMEVA OS on Push
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify-ameva-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get commit info
+        id: info
+        run: |
+          echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "msg=$(git log -1 --pretty='%s')" >> $GITHUB_OUTPUT
+          echo "author=$(git log -1 --pretty='%an')" >> $GITHUB_OUTPUT
+          echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Push update signal to ntfy.sh
+        run: |
+          curl -s \
+            -H "Title: MCP-Utils-Toolkit Updated" \
+            -H "Priority: default" \
+            -H "Tags: arrow_up,package" \
+            -H "X-Commit: ${{ steps.info.outputs.sha }}" \
+            -H "X-Message: ${{ steps.info.outputs.msg }}" \
+            -H "X-Author: ${{ steps.info.outputs.author }}" \
+            -H "X-Timestamp: ${{ steps.info.outputs.ts }}" \
+            -d "${{ steps.info.outputs.sha }}|${{ steps.info.outputs.msg }}|${{ steps.info.outputs.author }}|${{ steps.info.outputs.ts }}" \
+            https://ntfy.sh/uno-km-mcp-utils-toolkit
+
+      - name: Log
+        run: |
+          echo "✅ AMEVA OS Hub notified."
+          echo "   Commit : ${{ steps.info.outputs.sha }}"
+          echo "   Message: ${{ steps.info.outputs.msg }}"

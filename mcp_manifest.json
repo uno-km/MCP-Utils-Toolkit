@@ -1,0 +1,121 @@
+{
+  "version": "2.0",
+  "name": "AMEVA Utils Toolkit",
+  "repo": "uno-km/MCP-Utils-Toolkit",
+  "description": "AMEVA 공식 MCP 도구 모음 — GitHub에서 직접 브라우저로 실행",
+  "ntfy_channel": "uno-km-mcp-utils-toolkit",
+  "tools": [
+    {
+      "name": "format_json",
+      "description": "JSON 문자열을 파싱하고 보기 좋게 pretty-print합니다",
+      "type": "python",
+      "entry": "json.loads(__args__['json_string'])",
+      "inline": "import json\ntry:\n    parsed = json.loads(__args__['json_string'])\n    print(json.dumps(parsed, indent=2, ensure_ascii=False))\nexcept Exception as e:\n    print(f'Error: {e}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "json_string": { "type": "string", "description": "포맷할 JSON 문자열" }
+        },
+        "required": ["json_string"]
+      }
+    },
+    {
+      "name": "base64_encode",
+      "description": "텍스트를 Base64로 인코딩하거나 디코딩합니다",
+      "type": "python",
+      "inline": "import base64\nmode = __args__.get('mode', 'encode')\ndata = __args__['data']\ntry:\n    if mode == 'encode':\n        print(base64.b64encode(data.encode()).decode())\n    else:\n        print(base64.b64decode(data.encode()).decode())\nexcept Exception as e:\n    print(f'Error: {e}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "string", "description": "인코딩/디코딩할 데이터" },
+          "mode": { "type": "string", "description": "'encode' 또는 'decode'" }
+        },
+        "required": ["data"]
+      }
+    },
+    {
+      "name": "text_transform",
+      "description": "텍스트를 변환합니다. mode: upper / lower / reverse / title / snake_case / count",
+      "type": "python",
+      "inline": "text = __args__['text']\nmode = __args__.get('mode', 'upper')\nif mode == 'upper': print(text.upper())\nelif mode == 'lower': print(text.lower())\nelif mode == 'reverse': print(text[::-1])\nelif mode == 'title': print(text.title())\nelif mode == 'snake_case': print('_'.join(text.lower().split()))\nelif mode == 'count': print(f'chars={len(text)}, words={len(text.split())}, lines={len(text.splitlines())}')\nelse: print(f'Unknown mode: {mode}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "변환할 텍스트" },
+          "mode": { "type": "string", "description": "upper|lower|reverse|title|snake_case|count" }
+        },
+        "required": ["text"]
+      }
+    },
+    {
+      "name": "calc",
+      "description": "수식을 안전하게 계산합니다. 사칙연산, 지수, 나머지 등 기본 수식 지원.",
+      "type": "python",
+      "inline": "import math\nexpr = __args__['expression']\nallowed = set('0123456789+-*/().,** %')\nif all(c in allowed or c.isspace() for c in expr):\n    try:\n        result = eval(expr, {'__builtins__': {}, 'math': math, 'sqrt': math.sqrt, 'pi': math.pi, 'e': math.e})\n        print(f'{expr} = {result}')\n    except Exception as ex:\n        print(f'Error: {ex}')\nelse:\n    print('Error: Invalid expression. Only basic math allowed.')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "expression": { "type": "string", "description": "계산할 수식 (예: '2 ** 10 + 3 * 4')" }
+        },
+        "required": ["expression"]
+      }
+    },
+    {
+      "name": "generate_uuid",
+      "description": "랜덤 UUID v4를 생성합니다",
+      "type": "python",
+      "inline": "import uuid\ncount = int(__args__.get('count', 1))\nfor _ in range(min(count, 20)):\n    print(str(uuid.uuid4()))",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "number", "description": "생성할 UUID 개수 (기본값: 1, 최대 20)" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "timestamp_convert",
+      "description": "Unix timestamp와 날짜 문자열을 상호 변환합니다",
+      "type": "python",
+      "inline": "from datetime import datetime, timezone\nimport time\nmode = __args__.get('mode', 'now')\nif mode == 'now':\n    ts = int(time.time())\n    dt = datetime.now(timezone.utc)\n    print(f'Unix: {ts}\\nUTC: {dt.strftime(\"%Y-%m-%d %H:%M:%S UTC\")}\\nLocal: {datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\")}')\nelif mode == 'from_ts':\n    ts = int(__args__['value'])\n    print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))\nelif mode == 'to_ts':\n    dt = datetime.fromisoformat(__args__['value'])\n    print(int(dt.timestamp()))\nelse:\n    print('mode: now|from_ts|to_ts')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": { "type": "string", "description": "'now' (현재 시각) | 'from_ts' (ts→날짜) | 'to_ts' (날짜→ts)" },
+          "value": { "type": "string", "description": "변환할 값 (from_ts: Unix timestamp 숫자, to_ts: ISO 날짜 문자열)" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "hash_text",
+      "description": "문자열의 해시값을 계산합니다. 알고리즘: md5, sha1, sha256, sha512",
+      "type": "python",
+      "inline": "import hashlib\ntext = __args__['text'].encode()\nalgo = __args__.get('algorithm', 'sha256')\ntry:\n    h = hashlib.new(algo)\n    h.update(text)\n    print(f'{algo.upper()}: {h.hexdigest()}')\nexcept Exception as e:\n    print(f'Error: {e}. Supported: md5, sha1, sha256, sha512')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "해시할 텍스트" },
+          "algorithm": { "type": "string", "description": "해시 알고리즘: md5|sha1|sha256|sha512 (기본값: sha256)" }
+        },
+        "required": ["text"]
+      }
+    },
+    {
+      "name": "regex_match",
+      "description": "정규표현식으로 텍스트에서 패턴을 검색합니다",
+      "type": "python",
+      "inline": "import re\npattern = __args__['pattern']\ntext = __args__['text']\nmode = __args__.get('mode', 'findall')\ntry:\n    if mode == 'findall':\n        matches = re.findall(pattern, text)\n        print(f'Found {len(matches)} match(es):\\n' + '\\n'.join(matches))\n    elif mode == 'match':\n        m = re.match(pattern, text)\n        print(f'Match: {m.group() if m else None}')\n    elif mode == 'sub':\n        repl = __args__.get('replacement', '')\n        print(re.sub(pattern, repl, text))\nexcept Exception as e:\n    print(f'Error: {e}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": { "type": "string", "description": "정규표현식 패턴" },
+          "text": { "type": "string", "description": "검색할 텍스트" },
+          "mode": { "type": "string", "description": "findall|match|sub (기본값: findall)" },
+          "replacement": { "type": "string", "description": "sub 모드일 때 교체할 문자열" }
+        },
+        "required": ["pattern", "text"]
+      }
+    }
+  ]
+}
