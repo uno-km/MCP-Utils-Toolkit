@@ -227,3 +227,21 @@ paramiko
 ```
 
 > **선택적**: `weasyprint` 또는 `pdfkit` (HTML→PDF), `nvidia-smi` (GPU 모니터)
+
+---
+
+## 🌐 GitHub-Native MCP Hub Tools (WASM Browser Direct)
+
+AMEVA OS 브라우저 샌드박스 내부에서 다운로드 없이 실행되는 경량 브라우저 전용 도구 모음 (`mcp_manifest.json`):
+
+| 도구명 | 타입 | 설명 | 입력 스키마 (Arguments) |
+| :--- | :---: | :--- | :--- |
+| `format_json` | Python | JSON 포맷터 | `json_string` |
+| `base64_encode` | Python | Base64 인코더/디코더 | `data`, `mode` |
+| `text_transform` | Python | 영문 텍스트 대소문자/순서 변환 | `text`, `mode` |
+| `calc` | Python | 수식 안전 계산기 | `expression` |
+| `generate_uuid` | Python | UUID v4 생성 | `count` |
+| `timestamp_convert` | Python | Unix Timestamp 변환 | `mode`, `value` |
+| `hash_text` | Python | 해시값(md5, sha256 등) 생성 | `text`, `algorithm` |
+| `regex_match` | Python | 정규표현식 패턴 매치/치환 | `pattern`, `text`, `mode`, `replacement` |
+| `mermaid_to_png` | JS | **Mermaid 다이어그램 코드 → PNG 렌더링 후 VFS 저장** | `mermaid_code`, `output_path` |

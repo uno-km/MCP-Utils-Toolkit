@@ -116,6 +116,20 @@
         },
         "required": ["pattern", "text"]
       }
+    },
+    {
+      "name": "mermaid_to_png",
+      "description": "Mermaid 다이어그램 코드를 해석하여 PNG 이미지 파일로 변환한 뒤 VFS 가상 디렉토리에 저장합니다.",
+      "type": "js",
+      "inline": "const mermaidCode = __args__.mermaid_code;\nconst outputPath = __args__.output_path || 'home/diagram.png';\nif (!mermaidCode) return 'Error: mermaid_code is required';\n\nif (typeof mermaid === 'undefined') {\n  await new Promise((resolve, reject) => {\n    const script = document.createElement('script');\n    script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';\n    script.onload = () => {\n      mermaid.initialize({ startOnLoad: false });\n      resolve();\n    };\n    script.onerror = reject;\n    document.head.appendChild(script);\n  });\n}\n\nconst uniqueId = 'mermaid-' + Date.now();\nconst container = document.createElement('div');\ncontainer.style.visibility = 'hidden';\ncontainer.style.position = 'absolute';\ncontainer.id = uniqueId + '-container';\ndocument.body.appendChild(container);\n\nlet svgText;\ntry {\n  const { svg } = await mermaid.render(uniqueId, mermaidCode, container);\n  svgText = svg;\n} catch (err) {\n  container.remove();\n  return 'Mermaid Render Error: ' + err.message;\n}\ncontainer.remove();\n\nreturn await new Promise((resolve) => {\n  const img = new Image();\n  const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });\n  const url = URL.createObjectURL(svgBlob);\n  \n  img.onload = () => {\n    const canvas = document.createElement('canvas');\n    const scale = 2;\n    canvas.width = img.naturalWidth * scale;\n    canvas.height = img.naturalHeight * scale;\n    \n    const ctx = canvas.getContext('2d');\n    ctx.fillStyle = 'white';\n    ctx.fillRect(0, 0, canvas.width, canvas.height);\n    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);\n    \n    URL.revokeObjectURL(url);\n    \n    try {\n      const pngDataUrl = canvas.toDataURL('image/png');\n      if (window.amevaOS && typeof window.amevaOS.writeFile === 'function') {\n        window.amevaOS.writeFile(outputPath, pngDataUrl);\n        resolve('Successfully rendered Mermaid to PNG and saved to VFS: ' + outputPath);\n      } else {\n        resolve('Rendered successfully (VFS write skipped): ' + pngDataUrl.substring(0, 60) + '...');\n      } \n    } catch (e) {\n      resolve('Canvas toDataURL conversion error: ' + e.message);\n    }\n  };\n  img.onerror = () => {\n    URL.revokeObjectURL(url);\n    resolve('Image load error during SVG conversion');\n  };\n  img.src = url;\n});",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mermaid_code": { "type": "string", "description": "변환할 Mermaid 다이어그램 코드 문자열" },
+          "output_path": { "type": "string", "description": "저장할 VFS 경로 (예: 'home/diagram.png')" }
+        },
+        "required": ["mermaid_code"]
+      }
     }
   ]
 }
