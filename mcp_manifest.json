@@ -130,6 +130,34 @@
         },
         "required": ["mermaid_code"]
       }
+    },
+    {
+      "name": "md_to_docx",
+      "description": "마크다운(.md) 파일을 MS 워드(.docx) 파일로 변환합니다.",
+      "type": "python",
+      "inline": "import sys\nimport os\nsys.path.append('/app/workspace/src/tools/document')\nimport md_converter\ntry:\n    res = md_converter.convert_md_to_docx_logic(__args__['input_md_path'], __args__['output_docx_path'])\n    print(res)\nexcept Exception as e:\n    print(f'Error: {e}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "input_md_path": { "type": "string", "description": "입력 마크다운 파일 경로" },
+          "output_docx_path": { "type": "string", "description": "출력 DOCX 파일 경로" }
+        },
+        "required": ["input_md_path", "output_docx_path"]
+      }
+    },
+    {
+      "name": "docx_to_md",
+      "description": "MS 워드(.docx) 파일을 마크다운(.md) 파일로 변환합니다.",
+      "type": "python",
+      "inline": "import sys\nimport os\nsys.path.append('/app/workspace/src/tools/document')\nimport md_converter\ntry:\n    res = md_converter.docx_to_markdown(__args__['docx_path'], __args__.get('output_md_path'))\n    print(res)\nexcept Exception as e:\n    print(f'Error: {e}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "docx_path": { "type": "string", "description": "입력 DOCX 파일 경로" },
+          "output_md_path": { "type": "string", "description": "출력 마크다운 파일 경로 (생략 시 텍스트 반환)" }
+        },
+        "required": ["docx_path"]
+      }
     }
   ]
 }
