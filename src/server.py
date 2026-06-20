@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from tools.document.file_manager import docker_delete_file, docker_move_file
 from tools.document.md_converter import convert_md_to_docx_logic, docx_to_markdown, md_image_path_fixer
+from tools.document.code_consolidator import consolidate_codebase_logic
 from tools.git import git_manager
 from tools.ssh import ssh_manager
 from tools.utils import utils_manager
@@ -22,6 +23,12 @@ def create_server() -> FastMCP:
     # ──────────────────────────────────────────────────────────────────
     # Document & File Tools
     # ──────────────────────────────────────────────────────────────────
+
+    @mcp.tool(name="consolidate_codebase", description="Consolidate target directory codebase into a single Markdown file containing directory structure, SQLite DB schemas, and source code contents.")
+    def tool_consolidate_codebase(target_dir: str, output_file: str = None) -> str:
+        res = consolidate_codebase_logic(target_dir, output_file)
+        log_mcp_action("consolidate_codebase", {"target_dir": target_dir, "output_file": output_file}, res if len(res) < 1000 else f"Consolidated report ({len(res)} characters)")
+        return res
 
     @mcp.tool(name="convert_md_to_docx", description="Convert Markdown file to Word DOCX format. Supports headings, bullets, code blocks, bold, numbered lists.")
     def tool_md_to_docx(input_md_path: str, output_docx_path: str) -> str:

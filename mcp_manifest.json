@@ -158,6 +158,20 @@
         },
         "required": ["docx_path"]
       }
+    },
+    {
+      "name": "consolidate_codebase",
+      "description": "대상 디렉터리의 구조, 라이브러리를 제외한 전체 소스 코드, 그리고 존재하는 SQLite DB 스키마를 하나의 마크다운 파일로 병합 및 추출합니다.",
+      "type": "python",
+      "inline": "import sys\nimport os\nsys.path.append('/app/workspace/src/tools/document')\nimport code_consolidator\ntry:\n    res = code_consolidator.consolidate_codebase_logic(__args__['target_dir'], __args__.get('output_file'))\n    print(res)\nexcept Exception as e:\n    print(f'Error: {e}')",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "target_dir": { "type": "string", "description": "병합할 대상 디렉터리 경로" },
+          "output_file": { "type": "string", "description": "저장할 마크다운 파일 경로 (생략 시 병합된 텍스트 반환)" }
+        },
+        "required": ["target_dir"]
+      }
     }
   ]
 }

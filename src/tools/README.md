@@ -6,8 +6,8 @@
 
 - **database/**: SQLite 데이터베이스 연결 및 통합 데이터 연산을 처리합니다. ([상세 README](database/README.md))
   - 주요 도구: db_get_schema, db_execute_query, db_merge_tables
-- **document/**: 마크다운 변환 및 Docker 컨테이너 내 파일 조작을 담당합니다.
-  - 주요 도구: convert_md_to_docx, delete_file_in_docker, move_file_in_docker
+- **document/**: 디렉터리 및 코드베이스 병합, 마크다운 변환 및 Docker 컨테이너 내 파일 조작을 담당합니다.
+  - 주요 도구: consolidate_codebase, convert_md_to_docx, delete_file_in_docker, move_file_in_docker
 - **git/**: 로컬 워크스페이스 형상 관리 기능을 제공합니다. ([상세 README](git/README.md))
   - 주요 도구: git_status, git_log, git_diff, git_clone, git_pull, git_commit_and_push 등
 - **ssh/**: SSH 연결을 통한 원격 서버 셸 명령어 실행을 담당합니다.

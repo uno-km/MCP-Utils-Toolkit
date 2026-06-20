@@ -1,6 +1,6 @@
 # AMEVA MCP Toolkit Utils
 
-> **61개 MCP 도구**를 제공하는 AMEVA 에코시스템의 핵심 범용 유틸리티 서버.  
+> **62개 MCP 도구**를 제공하는 AMEVA 에코시스템의 핵심 범용 유틸리티 서버.  
 > Git, DB, 웹 크롤링, 시스템 모니터링, Docker, 네트워크 스캔, 코드 검색까지 단일 서버로 통합.
 
 ---
@@ -9,7 +9,7 @@
 
 | 도메인 | 경로 | 도구 수 | 설명 |
 | :----- | :--- | :-----: | :--- |
-| **Document** | `src/tools/document/` | 5 | MD↔DOCX 변환, 이미지 경로 수정, 파일 관리 |
+| **Document** | `src/tools/document/` | 6 | 디렉터리 및 코드베이스 병합, MD↔DOCX 변환, 이미지 경로 수정, 파일 관리 |
 | **Git** | `src/tools/git/` | 13 | git 전 작업 + 전체 레포 브로드캐스트, 커밋 메시지 생성 |
 | **SSH** | `src/tools/ssh/` | 1 | 원격 SSH 커맨드 실행 |
 | **Web** | `src/tools/web/` | 3 | 웹 크롤링, 가독성 클리너, 데드링크 스캐너 |
@@ -19,7 +19,7 @@
 | **Dataset** | `src/tools/dataset/` | 1 | Audit 로그 전사 병합 및 통계 분석 |
 | **Search** | `src/tools/search/` | 1 | BM25 기반 소스코드 전역 검색 |
 | **Network** | `src/tools/network/` | 1 | 병렬 포트 스캔 & AMEVA 서비스 자동 인식 |
-| **총계** | | **61** | |
+| **총계** | | **62** | |
 
 ---
 
@@ -41,10 +41,11 @@ AMEVA_DB_WRITE_TOKEN=your-secret-token-here
 
 ## 🛠️ 전체 도구 목록
 
-### 📄 Document & File (5개)
+### 📄 Document & File (6개)
 
 | 도구명 | 설명 |
 | :----- | :--- |
+| `consolidate_codebase` | 대상 디렉터리의 구조, 라이브러리를 제외한 전체 소스 코드, 그리고 존재하는 SQLite DB 스키마를 하나의 마크다운 파일로 병합 및 추출합니다. |
 | `convert_md_to_docx` | 마크다운 → DOCX (헤딩, 리스트, 코드블록, 볼드 지원) |
 | `docx_to_markdown` | DOCX → 마크다운 (헤딩, 테이블, 볼드/이탤릭 파싱) |
 | `md_image_path_fixer` | MD 내 깨진 이미지 경로 자동 교정 |
@@ -193,7 +194,7 @@ docker compose up -d
 ```
 AMEVA-MCP-Toolkit-Utils/
 ├── src/
-│   ├── server.py              # FastMCP 서버 진입점 (61개 도구 등록)
+│   ├── server.py              # FastMCP 서버 진입점 (62개 도구 등록)
 │   ├── tools/
 │   │   ├── document/          # MD↔DOCX, 파일 관리
 │   │   ├── git/               # Git 전 작업 + 브로드캐스터
