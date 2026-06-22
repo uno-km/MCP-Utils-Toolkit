@@ -175,6 +175,8 @@ def consolidate_codebase_logic(target_dir: str, output_file: str = None) -> str:
             content = read_file_content(file)
             
             md_lines.append(f"### File: `{rel_path}`\n")
+            md_lines.append(f"- **Relative Path**: `{rel_path}`\n")
+            md_lines.append(f"- **Full Path**: `{file}`\n\n")
             md_lines.append(f"```{lang}\n")
             md_lines.append(content)
             if not content.endswith("\n"):
