@@ -84,7 +84,12 @@ def assemble_pythonpath(base_dir):
     """
     Dynamically scan the base directory for AMEVA projects and assemble PYTHONPATH.
     """
-    paths = ["."]
+    # Prioritize target base directory and its inner src to prevent package shadowing (e.g. src.core)
+    paths = [base_dir]
+    target_src = os.path.join(base_dir, "src")
+    if os.path.isdir(target_src):
+        paths.append(target_src)
+    paths.append(".")
     
     # Navigate to parent folder (c:\ameva) to dynamically discover subprojects
     parent_dir = os.path.abspath(os.path.join(base_dir, ".."))
@@ -93,12 +98,12 @@ def assemble_pythonpath(base_dir):
         if os.path.exists(parent_dir):
             for item in os.listdir(parent_dir):
                 full_path = os.path.join(parent_dir, item)
+                # Skip target project itself to avoid duplicates
+                if os.path.abspath(full_path) == os.path.abspath(base_dir):
+                    continue
                 if os.path.isdir(full_path) and (item.lower().startswith("ameva-") or "nexus" in item.lower()):
                     paths.append(full_path)
-                    # Add inner src folder if present
-                    src_path = os.path.join(full_path, "src")
-                    if os.path.isdir(src_path):
-                        paths.append(src_path)
+                    # CRITICAL: DO NOT add inner 'src' of other projects to prevent Namespace Shadowing (e.g. Conductor's src/__init__.py)
     except Exception as e:
         print(f"[WARN] Error scanning parent AMEVA projects: {e}")
         
@@ -141,11 +146,25 @@ def main():
     for path_item in dynamic_pythonpath.split(";" if os.name == "nt" else ":"):
         print(f"  - {path_item}")
         
+    # 2. Ensure target src is importable as a regular package to prevent namespace shadowing
+    temp_init_path = None
+    target_src = os.path.join(project_dir, "src")
+    if os.path.isdir(target_src):
+        init_file = os.path.join(target_src, "__init__.py")
+        if not os.path.exists(init_file):
+            print("[*] Target inner src lacks __init__.py. Temporarily creating one to prevent Namespace Shadowing.")
+            try:
+                with open(init_file, "w", encoding="utf-8") as f:
+                    f.write("# Temporary package marker created by AMEVA Dynamic Test Runner\n")
+                temp_init_path = init_file
+            except Exception as e:
+                print(f"[WARN] Failed to create temporary __init__.py: {e}")
+
     # Create child process environment
     env = os.environ.copy()
     env["PYTHONPATH"] = dynamic_pythonpath
     
-    # 2. Determine target tests
+    # 3. Determine target tests
     run_cmd = [sys.executable]
     
     if args.modified:
@@ -153,6 +172,11 @@ def main():
         modified_files = get_git_modified_files(project_dir)
         if not modified_files:
             print("[Info] No git modified files detected. Skipping test execution.")
+            if temp_init_path and os.path.exists(temp_init_path):
+                try:
+                    os.remove(temp_init_path)
+                except Exception:
+                    pass
             sys.exit(0)
             
         print(f"  - Modified files detected: {len(modified_files)}")
@@ -176,19 +200,31 @@ def main():
         print(f"\n[*] Mode: All tests")
         if not os.path.exists(tests_dir):
             print(f"[Error] Tests directory '{args.test_dir}' does not exist.")
+            if temp_init_path and os.path.exists(temp_init_path):
+                try:
+                    os.remove(temp_init_path)
+                except Exception:
+                    pass
             sys.exit(1)
         run_cmd.extend(["-m", "unittest", "discover", "-s", tests_dir])
         
-    # 3. Execute the tests via subprocess
+    # 4. Execute the tests via subprocess
     print("\n[*] Launching unittest runner sub-process...")
     print(f"[*] Command: {' '.join(run_cmd)}\n")
     
     try:
-        res = subprocess.run(run_cmd, env=env)
+        res = subprocess.run(run_cmd, env=env, cwd=project_dir)
         sys.exit(res.returncode)
     except Exception as e:
         print(f"[Fatal] Failed to execute unittest subprocess: {e}")
         sys.exit(1)
+    finally:
+        if temp_init_path and os.path.exists(temp_init_path):
+            print("\n[*] Cleaning up temporary __init__.py...")
+            try:
+                os.remove(temp_init_path)
+            except Exception as e:
+                print(f"[WARN] Failed to remove temporary __init__.py: {e}")
 
 if __name__ == "__main__":
     main()
