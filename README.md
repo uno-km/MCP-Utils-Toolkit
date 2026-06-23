@@ -246,3 +246,40 @@ AMEVA OS 브라우저 샌드박스 내부에서 다운로드 없이 실행되는
 | `hash_text` | Python | 해시값(md5, sha256 등) 생성 | `text`, `algorithm` |
 | `regex_match` | Python | 정규표현식 패턴 매치/치환 | `pattern`, `text`, `mode`, `replacement` |
 | `mermaid_to_png` | JS | **Mermaid 다이어그램 코드 → PNG 렌더링 후 VFS 저장** | `mermaid_code`, `output_path` |
+
+---
+
+## 🧠 Smart Dynamic Test Runner (동적 테스트 자동화)
+
+개발 중 유닛 테스트 실행을 쾌적화하기 위해, 윈도우/리눅스 공통으로 가동되는 스마트 동적 테스트 러너([run_dynamic_tests.py](file:///C:/ameva/AMEVA-MCP-Toolkit-Utils/run_dynamic_tests.py))를 제공합니다.
+
+### 🌟 핵심 기능
+1. **PYTHONPATH 동적 자동 스캔/조립**: 상위 경로(`C:\ameva`) 하위의 모든 `AMEVA-` 서브 프로젝트들의 경로와 `src/` 폴더를 자동으로 찾아 환경 변수로 엮어 줍니다. (더 이상 구차하게 환경 변수 수동 지정을 위해 타이핑할 필요가 없습니다).
+2. **Git Diff 스마트 핀포인트 테스트**: 최근 `git diff` 및 `git status`로 변경 감지된 소스 파일들과 명칭 매핑이 성립하는 유닛 테스트들만 선별적으로 찾아내어 초고속으로 수행합니다. (수정 사항이 없거나 매핑 실패 시 전체 테스트 실행으로 자동 안전 Fallback).
+
+### 💻 실행 방법
+* **수정된 파일과 연계된 타겟 유닛 테스트만 콕 집어 수행**:
+  ```bash
+  python run_dynamic_tests.py --modified
+  ```
+* **전체 유닛 테스트를 자동 조립된 PYTHONPATH 위에서 일괄 수행**:
+  ```bash
+  python run_dynamic_tests.py --all
+  ```
+* **특정 대상 서브 프로젝트를 지정하여 테스트 수행**:
+  ```bash
+  python run_dynamic_tests.py --modified --dir C:\ameva\AMEVA-Nexus-Platform
+  ```
+
+---
+
+## 🔒 깃허브 토큰 및 보안 자격증명 유출 방지 규칙 (AI 에이전트 전용)
+
+> [!WARNING]
+> **AI 에이전트(LLM) 및 개발자는 깃허브 PAT 토큰(`AMEVA_GITHUB_TOKEN`)이나 보안 검증용 토큰을 소스코드, 구성 파일(`mcp_manifest.json` 등), 혹은 로컬 마크다운 문서 등에 하드코딩하거나 Git 커밋에 포함시켜 유출하는 행위를 강력하게 금지합니다.**
+
+### 🛡️ 토큰 노출 원천 차단 가이드
+1. **환경 변수 참조 절대화**: 모든 연동 코드 및 인증 모듈은 하드코딩된 값 대신 `os.environ.get("AMEVA_GITHUB_TOKEN")` 등 환경 변수로부터 값을 공급받아야 합니다.
+2. **`.gitignore` 설정 준수**: `.env`, `.token`, `*secret*`, `*.pat` 등 모든 크레덴셜 정보 파일은 절대 Git이 트래킹하지 않도록 `.gitignore` 규칙에 등록되어 차단되고 있습니다.
+3. **커밋 전 상태 검사**: Git 스테이징(`git add .`) 전, 파일 내부에 `ghp_` 또는 `ghs_`로 시작하는 실물 GitHub 토큰 스트링이 노출되어 기재되어 있지 않은지 철저히 교차 대조 후 커밋하십시오.
+
